@@ -842,11 +842,23 @@ def department_csv_fill_download(dept: str):
         df = pd.read_csv(path, encoding='windows-1252', sep=';')
         source = request.args.get('source')
         if source == 'assign':
-            # Load assignment file (shared default location)
-            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-            assign_path = os.path.join(base_dir, 'TachesLignes_assignÃ©.csv')
-            if not os.path.exists(assign_path):
-                return jsonify({"ok": False, "error": "TachesLignes_assignÃ©.csv introuvable"}), 404
+            # Load assignment file from the department upload folder
+            dept_dir = os.path.join(uploads_dir_base(), 'departments', dept)
+            candidates = [
+                'TachesLignes_assigne.csv',
+                'TachesLignes_assigné.csv',
+                'TachesLignes_assign.csv',
+                'TachesLignes_assignÃ©.csv',
+                'TachesLignes_assignǸ.csv',
+            ]
+            assign_path = None
+            for name in candidates:
+                p = os.path.join(dept_dir, name)
+                if os.path.exists(p):
+                    assign_path = p
+                    break
+            if not assign_path:
+                return jsonify({"ok": False, "error": "Fichier d'assignation introuvable", "folder": dept_dir}), 404
             df_asg = pd.read_csv(assign_path, encoding='windows-1252', sep=';')
             df2 = fill_tachessepare_from_assign(df, df_asg)
         else:
