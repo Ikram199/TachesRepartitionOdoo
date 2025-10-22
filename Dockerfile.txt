@@ -1,0 +1,25 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Installer dépendances système pour psycopg2, numpy, pandas, mysqlclient
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libpq-dev \
+    python3-dev \
+    build-essential \
+    default-libmysqlclient-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+# Copier l'application
+COPY . /app
+
+# Nettoyer requirements.txt et installer les paquets
+RUN sed -i '/^\s*$/d' requirements.txt \
+ && pip install --upgrade pip setuptools wheel \
+ && pip install --force-reinstall --no-cache-dir numpy==1.26.4 pandas==2.2.2 \
+ && pip install -r requirements.txt
+
+EXPOSE 8080
+
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "legMemo:app"]
