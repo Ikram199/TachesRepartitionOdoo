@@ -449,7 +449,7 @@ def get_headers_for_logical(department: Optional[str], logical: str, base_dir: O
             return []
         # Prefer per-department override
         if department:
-            dept_path = os.path.join(here, 'uploads', 'departments', department, f"{logical}.csv")
+            dept_path = os.path.join(uploads_dir_base(), 'departments', department, f"{logical}.csv")
             if os.path.exists(dept_path):
                 df = pd.read_csv(dept_path, encoding=ENCODING, sep=SEP, nrows=0)
                 return list(df.columns)

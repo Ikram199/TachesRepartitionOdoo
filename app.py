@@ -418,7 +418,7 @@ def download_assigned():
     dept = request.args.get('dept')
     candidates = []
     if dept:
-        dept_dir = os.path.join(here, 'uploads', 'departments', dept)
+        dept_dir = os.path.join(uploads_dir_base(), 'departments', dept)
         candidates.append(os.path.join(dept_dir, expected_name))
     candidates.extend([
         os.path.join(here, expected_name),
@@ -747,7 +747,7 @@ def department_assign(dept: str):
         return jsonify({"ok": False, "error": f"Cannot import run.py: {ASSIGN_IMPORT_ERROR}"}), 500
     # Compute department-specific file paths (strict: no fallback to root)
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-    dept_dir = os.path.join(os.path.dirname(__file__), 'uploads', 'departments', dept)
+    dept_dir = os.path.join(uploads_dir_base(), 'departments', dept)
     os.makedirs(dept_dir, exist_ok=True)
     required = {
         'tacheslignes': os.path.join(dept_dir, 'tacheslignes.csv'),
