@@ -31,11 +31,11 @@ def _mysql_params_from_env():
     Lis les variables d'env MYSQL_*.
     """
     return {
-        "host": _get_env("MYSQL_HOST", "mysql.railway.internal"),
+        "host": _get_env("MYSQL_HOST", "srv123456.hstgr.io"),
         "port": int(_get_env("MYSQL_PORT", "3306") or "3306"),
-        "user": _get_env("MYSQL_USER", "root"),
-        "password": _get_env("MYSQL_PASSWORD", ""),
-        "db": _get_env("MYSQL_DB", "railway"),
+        "user": _get_env("MYSQL_USER", "u385695825_usertasks"),
+        "password": _get_env("MYSQL_PASSWORD", "Usertasks12"),
+        "db": _get_env("MYSQL_DB", "u385695825_demo"),
     }
 
 def _build_sqlalchemy_url(user: str, password: str, host: str, port: int, db: Optional[str]) -> str:
