@@ -1,0 +1,60 @@
+import os
+import json
+from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, flash
+from dotenv import load_dotenv
+
+from db import (
+    get_engine, test_connection, ensure_database_exists, set_current_database,
+    get_server_engine, qualify_db_name, is_allowed_db, db_namespace,
+    is_allowed_department, allowed_departments, derive_departments_from_databases
+)
+from models import init_db
+from loader import load_csv_to_mysql, add_parent_to_path
+from loader import sanitize_identifier as _sanitize_id
+from loader import ingest_file as ingest_single_file
+from loader import load_department_bundle, CSV_LOGICAL, resolve_dept_csv_paths, get_headers_for_logical, fill_ressource_by_ligne, fill_tachessepare_from_assign
+
+
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=False)
+
+add_parent_to_path()
+try:
+    import run as assign_module
+except Exception as e:
+    assign_module = None
+    ASSIGN_IMPORT_ERROR = str(e)
+else:
+    ASSIGN_IMPORT_ERROR = None
+
+
+app = Flask(__name__, static_folder="static", template_folder="templates")
+# Configure secret key for sessions/flash; read from env or use a dev default
+app.secret_key = (
+    os.environ.get("FLASK_SECRET_KEY")
+    or os.environ.get("SECRET_KEY")
+    or "dev-change-me"
+)
+# Ensure JSON responses keep accents (UTF-8) instead of ASCII escaping
+app.config['JSON_AS_ASCII'] = False
+
+
+def _truthy(s: str | None) -> bool:
+    if s is None:
+        return False
+    return str(s).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def file_only_mode() -> bool:
+    # When true, UI should hide DB features and routes may no-op for DB
+    return _truthy(os.environ.get("FILE_ONLY")) or _truthy(os.environ.get("DISABLE_DB"))
+
+
+@app.get("/health")
+def health():
+    if file_only_mode():
+        db_status = "disabled"
+    else:
+        try:
+            test_connection()
+            db_status = "ok"
+        except Exception as e:

@@ -52,6 +52,9 @@ def file_only_mode() -> bool:
     # When true, UI should hide DB features and routes may no-op for DB
     return _truthy(os.environ.get("FILE_ONLY")) or _truthy(os.environ.get("DISABLE_DB"))
 
+def single_db_mode() -> bool:
+    # In single-db mode, we never create/switch per-department databases
+    return _truthy(os.environ.get("SINGLE_DB"))
 
 @app.get("/health")
 def health():
@@ -623,10 +626,14 @@ def simple_load():
         dept = request.args.get("dept") or payload.get("dept")
         if not dept:
             return jsonify({"ok": False, "error": "ParamÃ¨tre 'dept' requis"}), 400
-        qname = qualify_db_name(dept)
-        ensure_database_exists(qname)
-        set_current_database(qname)
-        engine = get_engine()
+        if single_db_mode():
+            qname = os.environ.get("MYSQL_DB") or ""
+            engine = get_engine()
+        else:
+            qname = qualify_db_name(dept)
+            ensure_database_exists(qname)
+            set_current_database(qname)
+            engine = get_engine()
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
         # Ingestion stricte depuis le dossier du département (évite mélanges)
         results = load_department_bundle(engine, department=dept, table_prefix=None, base_dir=base_dir, strict=True)
@@ -673,7 +680,7 @@ def ui_department_csv(dept: str):
         return redirect(url_for('ui_departments'))
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
     paths = resolve_dept_csv_paths(dept, base_dir=base_dir, strict=True)
-    return render_template("department_csv.html", dept=dept, files=CSV_LOGICAL, paths=paths, file_only=file_only_mode())
+    return render_template("department_csv.html", dept=dept, files=CSV_LOGICAL, paths=paths, file_only=file_only_mode(), single_db=single_db_mode())
 
 
 @app.post("/departments/<dept>/csv/upload")
@@ -700,9 +707,12 @@ def department_csv_upload(dept: str):
 def department_csv_load(dept: str):
     if not is_allowed_department(dept):
         return jsonify({"ok": False, "error": "DÃ©partement non autorisÃ©"}), 403
-    ensure_database_exists(qualify_db_name(dept))
-    set_current_database(qualify_db_name(dept))
-    engine = get_engine()
+    if single_db_mode():
+        engine = get_engine()
+    else:
+        ensure_database_exists(qualify_db_name(dept))
+        set_current_database(qualify_db_name(dept))
+        engine = get_engine()
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
     try:
         results = load_department_bundle(engine, department=dept, table_prefix=None, base_dir=base_dir, strict=True)
@@ -712,6 +722,17 @@ def department_csv_load(dept: str):
     except Exception as e:
         flash(f"Erreur: {e}", "error")
         return redirect(url_for('ui_department_csv', dept=dept))
+
+@app.get("/departments/open")
+def departments_open():
+    name = request.args.get('dept')
+    if not name:
+        flash("Saisissez un nom de département", "error")
+        return redirect(url_for('ui_departments'))
+    if not is_allowed_department(name):
+        flash("DǸpartement non autorisǸ", "error")
+        return redirect(url_for('ui_departments'))
+    return redirect(url_for('ui_department_csv', dept=name))
 
 
 @app.post("/departments/<dept>/assign")
@@ -985,7 +1006,3 @@ if __name__ == "__main__":
     host = os.environ.get("FLASK_HOST", "127.0.0.1")
     port = int(os.environ.get("FLASK_PORT", "5050"))
     app.run(host=host, port=port)
-
-
-
-

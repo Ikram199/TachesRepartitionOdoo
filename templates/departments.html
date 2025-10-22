@@ -26,10 +26,18 @@
           {% endfor %}
         </ul>
         {% else %}
-        <p>Aucun département listé. Configurez ALLOWED_DEPARTMENTS dans .env.</p>
+        <p>Aucun département listé. Configurez ALLOWED_DEPARTMENTS dans .env, ou ouvrez un département ci-dessous.</p>
         {% endif %}
+        <form method="GET" action="/departments/open" class="db-form" style="margin-top:12px;">
+          <div class="row">
+            <label for="dept">Ouvrir un département</label>
+            <input type="text" name="dept" id="dept" placeholder="ex: demo" />
+          </div>
+          <div class="actions">
+            <button type="submit">Ouvrir</button>
+          </div>
+        </form>
       </section>
     </main>
   </body>
   </html>
-
