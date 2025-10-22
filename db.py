@@ -34,7 +34,7 @@ def _mysql_params_from_env():
         "host": _get_env("MYSQL_HOST", "sme-ramh.com"),
         "port": int(_get_env("MYSQL_PORT", "3306") or "3306"),
         "user": _get_env("MYSQL_USER", "u385695825_usertasks"),
-        "password": _get_env("MYSQL_PASSWORD", "ZaidZwin123"),
+        "password": _get_env("MYSQL_PASSWORD", "Usertasks12"),
         "db": _get_env("MYSQL_DB", "u385695825_demo"),
     }
 
