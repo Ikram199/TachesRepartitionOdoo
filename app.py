@@ -679,6 +679,9 @@ def ui_department_csv(dept: str):
         flash("DÃ©partement non autorisÃ©", "error")
         return redirect(url_for('ui_departments'))
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+    # Ensure the department upload directory exists so uploads work immediately
+    dept_dir = os.path.join(os.path.dirname(__file__), 'uploads', 'departments', dept)
+    os.makedirs(dept_dir, exist_ok=True)
     paths = resolve_dept_csv_paths(dept, base_dir=base_dir, strict=True)
     return render_template("department_csv.html", dept=dept, files=CSV_LOGICAL, paths=paths, file_only=file_only_mode(), single_db=single_db_mode())
 
