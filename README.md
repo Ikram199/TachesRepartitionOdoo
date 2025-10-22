@@ -52,3 +52,4 @@ Remarque sur les modèles ORM vs tables "larges"
 - Les modèles ORM fournis stockent la ligne brute dans la colonne JSON `data` pour être robustes aux changements de colonnes.
 - Le chargeur CSV continue à maintenir des tables "larges" (colonnes explicites) et à les faire évoluer automatiquement.
 - Vous pouvez choisir d'utiliser l'un ou l'autre selon vos besoins d'accès et de reporting.
+"# TachesRepartitionOdoo" 
