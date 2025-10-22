@@ -31,7 +31,7 @@ def _mysql_params_from_env():
     Lis les variables d'env MYSQL_*.
     """
     return {
-        "host": _get_env("MYSQL_HOST", "srv123456.hstgr.io"),
+        "host": _get_env("MYSQL_HOST", "sme-ramh.com"),
         "port": int(_get_env("MYSQL_PORT", "3306") or "3306"),
         "user": _get_env("MYSQL_USER", "u385695825_usertasks"),
         "password": _get_env("MYSQL_PASSWORD", "Usertasks12"),
