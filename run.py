@@ -45,25 +45,48 @@ def _load_csv(path: str, nrows: Optional[int] = None) -> pd.DataFrame:
 
 
 def _extract_competences(df_comp: pd.DataFrame) -> Dict[str, set]:
-    """Return mapping resource -> set(competences)."""
+    """Return mapping resource -> set(competences).
+
+    Column heuristics:
+    - Resource column: contains one of ['ressource', 'nom prenom', 'nom prénom', 'nom', 'employe', 'employé']
+    - Competence columns: any column containing ['qualif', 'compet', 'certif'] (multi-columns supported)
+    """
     if df_comp is None or df_comp.empty:
         return {}
-    res_col = _find_col(list(df_comp.columns), "ressource")
-    comp_col = _find_col(list(df_comp.columns), "competence")
+    cols = list(df_comp.columns)
+    # Detect resource column
+    res_col = (
+        _find_col(cols, "ressource")
+        or _find_col(cols, "nom", "prenom")
+        or _find_col(cols, "nom", "prénom")
+        or _find_col(cols, "employe")
+        or _find_col(cols, "employé")
+        or _find_col(cols, "nom")
+    )
     if res_col is None:
         return {}
-    if comp_col is None:
-        # If no competence column, treat as all-rounders
-        return {str(r).strip(): set() for r in df_comp[res_col].dropna().unique().tolist()}
+    # Detect competence columns (can be multiple: Qualif 1/2/3, etc.)
+    comp_cols: List[str] = []
+    for c in cols:
+        low = _low(c)
+        if any(k in low for k in ["qualif", "compet", "certif"]):
+            comp_cols.append(c)
     groups: Dict[str, set] = {}
+    if not comp_cols:
+        # Treat as all-rounders (no explicit competence)
+        for r in df_comp[res_col].dropna().astype(str).map(str.strip).tolist():
+            if r:
+                groups.setdefault(r, set())
+        return groups
     for _, row in df_comp.iterrows():
         r = str(row.get(res_col, "")).strip()
-        c = str(row.get(comp_col, "")).strip()
         if not r:
             continue
         groups.setdefault(r, set())
-        if c:
-            groups[r].add(c)
+        for c in comp_cols:
+            v = str(row.get(c, "")).strip()
+            if v:
+                groups[r].add(v)
     return groups
 
 
@@ -81,7 +104,9 @@ def _extract_tasks(df_tasks: pd.DataFrame) -> Tuple[pd.DataFrame, Optional[str],
     line_col = _find_col(cols, "ligne", "planche") or next(
         (c for c in cols if _low(c).startswith("ligne")), None
     )
-    need_comp_col = _find_col(cols, "competence")
+    # Required competence: prefer Qualif 1, then Qualif 2/3; else any 'competence'
+    qual_cols = [c for c in cols if "qualif" in _low(c)]
+    need_comp_col = qual_cols[0] if qual_cols else _find_col(cols, "competence")
     return df_tasks.copy(), line_col, need_comp_col
 
 
@@ -121,7 +146,26 @@ def assign_tasks(max_assign_per_resource_per_day: int = MAX_ASSIGN_PER_RESOURCE_
 
     # Build resources and their competences
     res_to_comp = _extract_competences(df_comp)
-    resources = list(res_to_comp.keys()) or ["R1", "R2", "R3"]
+    resources = list(res_to_comp.keys())
+    if not resources:
+        # Fallback attempt: derive resources from pointage if present
+        try:
+            df_pt = _load_csv(POINTAGE_PATH)
+            res_col = (
+                _find_col(list(df_pt.columns), "ressource")
+                or _find_col(list(df_pt.columns), "nom", "prenom")
+                or _find_col(list(df_pt.columns), "nom", "prénom")
+                or _find_col(list(df_pt.columns), "employe")
+                or _find_col(list(df_pt.columns), "employé")
+            )
+            if res_col:
+                resources = (
+                    df_pt[res_col].dropna().astype(str).map(str.strip).drop_duplicates().tolist()
+                )
+        except Exception:
+            pass
+    if not resources:
+        resources = ["R1", "R2", "R3"]
     loads: Dict[str, int] = {r: 0 for r in resources}
 
     # Sort tasks for deterministic output
@@ -156,7 +200,18 @@ def assign_tasks(max_assign_per_resource_per_day: int = MAX_ASSIGN_PER_RESOURCE_
 
     # Perform assignment
     if need_comp_col and need_comp_col in df_sorted.columns:
-        comps = df_sorted[need_comp_col].astype(str).tolist()
+        # take the first non-empty among Qualif 1/2/3 if multiple
+        if any("qualif" in _low(c) for c in df_sorted.columns):
+            qual_cols = [c for c in df_sorted.columns if "qualif" in _low(c)]
+            def first_non_empty(row):
+                for c in qual_cols:
+                    v = str(row.get(c, "")).strip()
+                    if v:
+                        return v
+                return ""
+            comps = [first_non_empty(row) for _, row in df_sorted.iterrows()]
+        else:
+            comps = df_sorted[need_comp_col].astype(str).tolist()
     else:
         comps = [None] * len(df_sorted)
     assigned: List[str] = []
@@ -186,4 +241,3 @@ def assign_tasks(max_assign_per_resource_per_day: int = MAX_ASSIGN_PER_RESOURCE_
 if __name__ == "__main__":
     path = assign_tasks()
     print(f"Assignment written to: {path}")
-
