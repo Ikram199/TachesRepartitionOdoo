@@ -12,7 +12,7 @@ from models import init_db
 from loader import load_csv_to_mysql, add_parent_to_path
 from loader import sanitize_identifier as _sanitize_id
 from loader import ingest_file as ingest_single_file
-from loader import load_department_bundle, CSV_LOGICAL, resolve_dept_csv_paths, get_headers_for_logical, fill_ressource_by_ligne, fill_tachessepare_from_assign
+from loader import load_department_bundle, CSV_LOGICAL, resolve_dept_csv_paths, get_headers_for_logical, fill_ressource_by_ligne, fill_tachessepare_from_assign, uploads_dir_base
 
 
 # Load environment variables: prefer .env, fallback to config.env if present
@@ -679,8 +679,8 @@ def ui_department_csv(dept: str):
         flash("DÃ©partement non autorisÃ©", "error")
         return redirect(url_for('ui_departments'))
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-    # Ensure the department upload directory exists so uploads work immediately
-    dept_dir = os.path.join(os.path.dirname(__file__), 'uploads', 'departments', dept)
+    # Ensure the department upload directory exists so uploads work immediately (respects UPLOADS_DIR)
+    dept_dir = os.path.join(uploads_dir_base(), 'departments', dept)
     os.makedirs(dept_dir, exist_ok=True)
     paths = resolve_dept_csv_paths(dept, base_dir=base_dir, strict=True)
     return render_template("department_csv.html", dept=dept, files=CSV_LOGICAL, paths=paths, file_only=file_only_mode(), single_db=single_db_mode())
@@ -698,7 +698,7 @@ def department_csv_upload(dept: str):
     f = request.files['file']
     if not f.filename:
         return jsonify({"ok": False, "error": "Nom vide"}), 400
-    uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads', 'departments', dept)
+    uploads_dir = os.path.join(uploads_dir_base(), 'departments', dept)
     os.makedirs(uploads_dir, exist_ok=True)
     save_path = os.path.join(uploads_dir, f"{logical}.csv")
     f.save(save_path)
@@ -996,7 +996,7 @@ def department_prepare(dept: str):
     if not is_allowed_department(dept):
         return jsonify({"ok": False, "error": "Départment non autorisé"}), 403
     try:
-        dept_dir = os.path.join(os.path.dirname(__file__), 'uploads', 'departments', dept)
+        dept_dir = os.path.join(uploads_dir_base(), 'departments', dept)
         os.makedirs(dept_dir, exist_ok=True)
         expected = {logical: os.path.join(dept_dir, f"{logical}.csv") for logical, _ in CSV_LOGICAL}
         exists = {k: os.path.exists(p) for k, p in expected.items()}

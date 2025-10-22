@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import os
+import tempfile
 import sys
 import unicodedata
 import hashlib
@@ -362,6 +363,25 @@ def ingest_file(engine: Engine, path: str, table_override: str | None = None, ta
     }
 
 
+def uploads_dir_base() -> str:
+    base_env = os.environ.get("UPLOADS_DIR")
+    if base_env:
+        try:
+            os.makedirs(base_env, exist_ok=True)
+            return base_env
+        except Exception:
+            pass
+    here = os.path.dirname(os.path.abspath(__file__))
+    default = os.path.join(here, 'uploads')
+    try:
+        os.makedirs(default, exist_ok=True)
+        return default
+    except Exception:
+        tmp = os.path.join(tempfile.gettempdir(), 'uploads')
+        os.makedirs(tmp, exist_ok=True)
+        return tmp
+
+
 def resolve_dept_csv_paths(department: str, base_dir: Optional[str] = None, strict: bool = False) -> Dict[str, Optional[str]]:
     """Return mapping logical_type -> file path.
 
@@ -369,8 +389,8 @@ def resolve_dept_csv_paths(department: str, base_dir: Optional[str] = None, stri
     - When strict=True: only accept per-dept upload; otherwise value is None
     """
     base = base_dir or os.getcwd()
-    here = os.path.dirname(os.path.abspath(__file__))
-    uploads_dir = os.path.join(here, 'uploads', 'departments', department)
+    uploads_base = uploads_dir_base()
+    uploads_dir = os.path.join(uploads_base, 'departments', department)
     paths: Dict[str, Optional[str]] = {}
     for logical, default_name in CSV_LOGICAL:
         dept_path = os.path.join(uploads_dir, f"{logical}.csv")
