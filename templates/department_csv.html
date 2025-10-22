@@ -60,6 +60,26 @@
         </form>
         {% endif %}
       </section>
+      <section>
+        {% if not file_only %}
+        <form method="GET" action="/departments/{{ dept }}/assign" style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <label>Max/jour
+            <input type="number" name="max" min="1" step="1" value="50" style="width:90px; margin-left:6px;"/>
+          </label>
+          <label style="margin-left:12px;">Debut
+            <input type="date" name="start" style="margin-left:6px;"/>
+          </label>
+          <label style="margin-left:12px;">Fin
+            <input type="date" name="end" style="margin-left:6px;"/>
+          </label>
+          <button type="submit" style="margin-left:12px;">Lancer l'affectation</button>
+        </form>
+        <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+          <a class="btn" href="/download?dept={{ dept }}">Telecharger l'assignation</a>
+          <a class="btn" href="/departments/{{ dept }}/csv/fill-download?type=tachessepare&source=assign">Remplir tachessepare depuis l'assignation</a>
+        </div>
+        {% endif %}
+      </section>
       {% if results %}
       <section>
         <h2>RÃ©sultats</h2>
