@@ -1,4 +1,4 @@
-﻿import os
+import os
 import json
 from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, flash
 from dotenv import load_dotenv
@@ -15,7 +15,11 @@ from loader import ingest_file as ingest_single_file
 from loader import load_department_bundle, CSV_LOGICAL, resolve_dept_csv_paths, get_headers_for_logical, fill_ressource_by_ligne, fill_tachessepare_from_assign
 
 
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=False)
+# Load environment variables: prefer .env, fallback to config.env if present
+_base_dir = os.path.dirname(__file__)
+_loaded = load_dotenv(os.path.join(_base_dir, ".env"), override=False)
+if not _loaded:
+    load_dotenv(os.path.join(_base_dir, "config.env"), override=False)
 
 add_parent_to_path()
 try:
@@ -111,6 +115,12 @@ def ui_databases():
         user_dbs = sorted(user_dbs)
     except Exception as e:
         user_dbs = []
+    # Fallback: if nothing is listed (e.g., shared hosting restricts SHOW DATABASES),
+    # propose the configured MYSQL_DB so the user can proceed.
+    if not user_dbs:
+        fallback_db = os.environ.get("MYSQL_DB")
+        if fallback_db:
+            user_dbs = [fallback_db]
     return render_template("databases.html", databases=user_dbs, namespace=db_namespace())
 
 
