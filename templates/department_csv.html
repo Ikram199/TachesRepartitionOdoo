@@ -1,0 +1,72 @@
+﻿<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CSV â€” {{ dept }}</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>CSV â€” DÃ©partement {{ dept }}</h1>
+      <nav>
+        <a href="/">Accueil</a>
+        <a href="/departments" class="active">DÃ©partements</a>
+      </nav>
+    </header>
+    <main>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <ul class="flash">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+          </ul>
+      {% endwith %}
+      <section>
+        <h2>Fichiers du dÃ©partement</h2>
+        <table class="grid">
+          <thead>
+            <tr><th>Type</th><th>Fichier actuel</th><th>Uploader</th><th>Modèle</th></tr>
+          </thead>
+          <tbody>
+            {% for logical, default_name in files %}
+            <tr>
+              <td>{{ logical }}</td>
+              <td><code>{{ paths.get(logical, '') }}</code></td>
+              <td>
+                <form method="POST" action="/departments/{{ dept }}/csv/upload?type={{ logical }}" enctype="multipart/form-data">
+                  <input type="file" name="file" accept=".csv,text/csv" />
+                  <button type="submit">Uploader</button>
+                </form>
+              </td>
+              <td>
+                <a class="btn" href="/departments/{{ dept }}/csv/template?type={{ logical }}&rows=5">TÃ©lÃ©charger Modèle</a>
+                {% if logical == 'tachessepare' %}
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+                  <a class="btn" href="/departments/{{ dept }}/csv/fill-download?type={{ logical }}">Remplir par regroupement</a>
+                  <a class="btn" href="/departments/{{ dept }}/csv/fill-download?type={{ logical }}&source=assign">Remplir depuis TachesLignes_assignÃ©</a>
+                </div>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% if not file_only %}
+        <form method="POST" action="/departments/{{ dept }}/csv/load" style="margin-top:12px;">
+          <button type="submit">Charger ces CSV dans la base du dÃ©partement</button>
+        </form>
+        {% endif %}
+      </section>
+      {% if results %}
+      <section>
+        <h2>RÃ©sultats</h2>
+        <pre class="output">{{ results|tojson(indent=2) }}</pre>
+      </section>
+      {% endif %}
+    </main>
+  </body>
+  </html>
+
+

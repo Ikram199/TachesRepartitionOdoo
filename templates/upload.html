@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Upload — Répartition</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Importer un CSV</h1>
+      <nav>
+        <a href="/">Dashboard</a>
+        <a href="/tables">Tables</a>
+        <a href="/upload" class="active">Upload</a>
+      </nav>
+    </header>
+    <main>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <ul class="flash">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+          </ul>
+        {% endif %}
+      {% endwith %}
+      <section>
+        <form method="POST" action="/upload" enctype="multipart/form-data">
+          <div class="row">
+            <label for="table">Nom de table (optionnel)</label>
+            <input name="table" id="table" type="text" placeholder="ex: priorite" />
+          </div>
+          <div class="row">
+            <label for="prefix">Préfixe de tables (département)</label>
+            <input name="prefix" id="prefix" type="text" placeholder="ex: dep_a" />
+          </div>
+          <div class="row">
+            <label for="dept">Département (créer un sous-dossier)</label>
+            <input name="dept" id="dept" type="text" placeholder="ex: ramp" />
+          </div>
+          <div class="row">
+            <label for="type">Type logique (pour nommer le fichier)</label>
+            <input name="type" id="type" list="csv_types" placeholder="ex: competence" />
+            <datalist id="csv_types">
+              <option value="competence" />
+              <option value="pointage" />
+              <option value="priorite" />
+              <option value="prog" />
+              <option value="tacheslignes" />
+              <option value="tachessepare" />
+            </datalist>
+          </div>
+          <div class="row">
+            <label for="file">Fichier CSV</label>
+            <input name="file" id="file" type="file" accept=".csv,text/csv" />
+          </div>
+          <button type="submit">Importer</button>
+        </form>
+      </section>
+    </main>
+  </body>
+  </html>
+

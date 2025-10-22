@@ -1,0 +1,83 @@
+﻿<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CSV â€” {{ db }}</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>CSV â€” Base {{ db }}</h1>
+      <nav>
+        <a href="/">Accueil</a>
+        <a href="/databases" class="active">Bases</a>
+      </nav>
+    </header>
+    <main>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <ul class="flash">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+          </ul>
+        {% endif %}
+      {% endwith %}
+      <section>
+        <h2>Fichiers requis</h2>
+        <table class="grid">
+          <thead>
+            <tr><th>#</th><th>Type</th><th>Fichier actuel</th><th>Uploader</th><th>Modèle</th></tr>
+          </thead>
+          <tbody>
+            {% for row in files %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>{{ row.logical }}</td>
+              <td><code>{{ row.path }}</code></td>
+              <td>
+                <form method="POST" action="/databases/{{ db }}/csv/upload?type={{ row.logical }}" enctype="multipart/form-data">
+                  <input type="file" name="file" accept=".csv,text/csv" />
+                  <button type="submit">Uploader</button>
+                </form>
+              </td>
+              <td>
+                {% set logical = row.logical %}
+                <a class="btn" href="/databases/{{ db }}/csv/template?type={{ logical }}&rows=5">TÃ©lÃ©charger Modèle</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <form method="POST" action="/databases/{{ db }}/csv/load" style="margin-top:12px;">
+          <button type="submit">Charger ces CSV dans la base {{ db }}</button>
+        </form>
+      </section>
+
+      {% if results %}
+      <section>
+        <h2>RÃ©sultats</h2>
+        <pre class="output">{{ results|tojson(indent=2) }}</pre>
+      </section>
+      {% endif %}
+
+      <section>
+        <h2>Actions</h2>
+        <div class="actions">
+          <form method="POST" action="/databases/{{ db }}/assign" style="display:inline-block; margin-right:8px;">
+            <button type="submit">1. Générer les tâches lignes</button>
+          </form>
+          <form method="POST" action="/databases/{{ db }}/tachessepare/fill" style="display:inline-block;">
+            <button type="submit">2. Recopier ressources par n° de ligne</button>
+          </form>
+          <a class="btn" href="/databases/{{ db }}/download/assign" style="margin-left:8px;">Télécharger l’assignation</a>
+          <a class="btn" href="/databases/{{ db }}/download/tachessepare" style="margin-left:8px;">Télécharger tachessepare.csv</a>
+        </div>
+      </section>
+    </main>
+  </body>
+  </html>
+
+
+

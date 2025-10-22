@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tables – Répartition</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Tables</h1>
+      <nav>
+        <a href="/">Dashboard</a>
+        <a href="/tables" class="active">Tables</a>
+        <a href="/upload">Upload</a>
+      </nav>
+    </header>
+    <main>
+      <section>
+        <h2>Liste des tables</h2>
+        <table class="grid">
+          <thead>
+            <tr><th>Table</th><th>Lignes</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {% for t in tables %}
+            <tr>
+              <td><a href="/table/{{ t.name }}">{{ t.name }}</a></td>
+              <td>{{ t.count }}</td>
+              <td><a class="btn" href="/export/{{ t.name }}.csv">Exporter CSV</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+  </html>
+

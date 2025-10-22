@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ name }} – Répartition</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Table: {{ name }}</h1>
+      <nav>
+        <a href="/">Dashboard</a>
+        <a href="/tables" class="active">Tables</a>
+        <a href="/upload">Upload</a>
+      </nav>
+    </header>
+    <main>
+      <section>
+        <div class="row" style="justify-content: space-between;">
+          <div>Total: {{ total }} lignes</div>
+          <div>
+            <a class="btn" href="/export/{{ name }}.csv">Exporter CSV</a>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead>
+              <tr>
+                {% for c in cols %}<th>{{ c }}</th>{% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in rows %}
+              <tr>
+                {% for c in cols %}
+                <td>{{ r[c] }}</td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <div>Page {{ page }} / {{ pages }}</div>
+          <div>
+            {% if page > 1 %}
+            <a class="btn" href="/table/{{ name }}?page={{ page-1 }}&size={{ size }}">Précédent</a>
+            {% endif %}
+            {% if page < pages %}
+            <a class="btn" href="/table/{{ name }}?page={{ page+1 }}&size={{ size }}">Suivant</a>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+  </html>
+

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Départements – Répartition</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Départements</h1>
+      <nav>
+        <a href="/">Accueil</a>
+        <a href="/tables">Tables</a>
+        <a href="/upload">Upload</a>
+        <a href="/departments" class="active">Départements</a>
+      </nav>
+    </header>
+    <main>
+      <section>
+        <h2>Liste (namespace: {{ namespace }})</h2>
+        {% if departments and departments|length %}
+        <ul>
+          {% for d in departments %}
+          <li><a class="btn" href="/departments/{{ d }}/csv">Gérer CSV – {{ d }}</a></li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p>Aucun département listé. Configurez ALLOWED_DEPARTMENTS dans .env.</p>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+  </html>
+

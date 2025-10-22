@@ -1,0 +1,39 @@
+﻿<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>App Web — Répartition</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Console de répartition</h1>
+      <nav>
+        <a href="/" class="active">Accueil</a>
+        <a href="/databases">Bases</a>
+        {% if not file_only %}<a href="/tables">Tables</a>{% endif %}
+      </nav>
+      <div id="health" class="pill">Vérification…</div>
+    </header>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <main>
+      <section>
+        <h2>Démarrer</h2>
+        <p>Choisissez une base pour gérer ses CSV et lancer les actions.</p>
+        <div class="actions">
+          <a class="btn" href="/databases">Aller aux bases</a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <small>App Web — Répartition CSV{% if not file_only %} → MySQL{% endif %} & Affectation</small>
+    </footer>
+
+    <script>window.FILE_ONLY = {{ 'true' if file_only else 'false' }};</script>
+    <script src="/static/main.js"></script>
+  </body>
+  </html>
+
