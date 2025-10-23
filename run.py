@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 import time
 import unicodedata
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Set
+import re
 
 import pandas as pd
 
@@ -43,6 +44,15 @@ def _find_col(cols: List[str], *needles: str) -> Optional[str]:
 
 def _load_csv(path: str, nrows: Optional[int] = None) -> pd.DataFrame:
     return pd.read_csv(path, encoding=ENCODING, sep=SEP, nrows=nrows)
+
+
+def _codes_from_value(v: object) -> Set[str]:
+    s = str(v or "").strip()
+    if not s:
+        return set()
+    # Split on non-alnum separators (space, /, -, , ; etc.)
+    toks = re.findall(r"[A-Za-z0-9]+", s.upper())
+    return set(toks)
 
 
 def _extract_competences(df_comp: pd.DataFrame) -> Dict[str, set]:
@@ -85,9 +95,9 @@ def _extract_competences(df_comp: pd.DataFrame) -> Dict[str, set]:
             continue
         groups.setdefault(r, set())
         for c in comp_cols:
-            v = str(row.get(c, "")).strip()
-            if v:
-                groups[r].add(v)
+            codes = _codes_from_value(row.get(c))
+            if codes:
+                groups[r].update(codes)
     return groups
 
 
@@ -275,23 +285,24 @@ def assign_tasks(max_assign_per_resource_per_day: int = MAX_ASSIGN_PER_RESOURCE_
         return chosen
 
     # Perform assignment
-    if need_comp_col and need_comp_col in df_sorted.columns:
-        # take the first non-empty among Qualif 1/2/3 if multiple
-        if any("qualif" in _low(c) for c in df_sorted.columns):
-            qual_cols = [c for c in df_sorted.columns if "qualif" in _low(c)]
-            def first_non_empty(row):
-                for c in qual_cols:
-                    v = str(row.get(c, "")).strip()
-                    if v:
-                        return v
-                return ""
-            comps = [first_non_empty(row) for _, row in df_sorted.iterrows()]
-        else:
-            comps = df_sorted[need_comp_col].astype(str).tolist()
+    # Build required competence sets per task (union of non-empty Qualif cols)
+    req_sets: List[Set[str]] = []
+    qual_cols = [c for c in df_sorted.columns if "qualif" in _low(c)]
+    if qual_cols:
+        for _, row in df_sorted.iterrows():
+            codes: Set[str] = set()
+            for c in qual_cols:
+                codes.update(_codes_from_value(row.get(c)))
+            req_sets.append(codes)
+    elif need_comp_col and need_comp_col in df_sorted.columns:
+        for _, row in df_sorted.iterrows():
+            req_sets.append(_codes_from_value(row.get(need_comp_col)))
+    else:
+        req_sets = [set() for _ in range(len(df_sorted))]
     else:
         comps = [None] * len(df_sorted)
     assigned: List[str] = []
-    for idx, req in enumerate(comps):
+    for idx, req_set in enumerate(req_sets):
         dstr = None
         vcode = None
         if date_col and date_col in df_sorted.columns:
@@ -301,7 +312,58 @@ def assign_tasks(max_assign_per_resource_per_day: int = MAX_ASSIGN_PER_RESOURCE_
                 dstr = str(df_sorted.iloc[idx][date_col]).strip()
         if vac_col and vac_col in df_sorted.columns:
             vcode = str(df_sorted.iloc[idx][vac_col]).strip()
-        assigned.append(pick_resource(req, dstr, vcode))
+        # Transform set to something pick_resource understands: keep set
+        def pick_with_set(required: Set[str], date_str: Optional[str], vacation: Optional[str]) -> str:
+            # Build candidate list using intersect logic
+            if required:
+                candidates = []
+                for r in resources:
+                    comps = res_to_comp.get(r, set())
+                    if not comps:
+                        candidates.append(r)  # all-rounder
+                    elif comps.intersection(required):
+                        candidates.append(r)
+            else:
+                candidates = list(resources)
+            # Apply program availability filter and load balancing using pick_resource core
+            # Reuse pick_resource logic by passing one arbitrary code from required (or None)
+            any_code = next(iter(required)) if required else None
+            # Temporarily narrow global resources to candidates
+            saved = list(resources)
+            try:
+                nonlocal_resources = candidates
+            except Exception:
+                nonlocal_resources = None
+            # Inline simplified selection using same mechanics
+            # Order by per-day load
+            key_date = date_str or ""
+            # Filter by program
+            if prog_index and date_str:
+                cand2 = []
+                for r in candidates:
+                    has_day = any((rr == r and dd == date_str) for rr, dd, _ in prog_index)
+                    ok = False
+                    if vacation:
+                        ok = (r, date_str, vacation) in prog_index
+                    ok = ok or (has_day and not vacation)
+                    if ok:
+                        cand2.append(r)
+                if cand2:
+                    candidates = cand2
+            if not candidates:
+                candidates = saved
+            candidates.sort(key=lambda r: loads.get((r, key_date), 0))
+            chosen = candidates[0]
+            cap_key = (chosen, key_date)
+            if max_assign_per_resource_per_day and loads.get(cap_key, 0) >= max_assign_per_resource_per_day:
+                for r in candidates:
+                    if loads.get((r, key_date), 0) < max_assign_per_resource_per_day:
+                        chosen = r
+                        break
+            loads[cap_key] = loads.get(cap_key, 0) + 1
+            return chosen
+
+        assigned.append(pick_with_set(req_set, dstr, vcode))
     df_sorted[out_col] = assigned
 
     # Backup old output
