@@ -19,7 +19,6 @@ CSV_FILES = [
     "competence.csv",
     "pointage.csv",
     "priorite.csv",
-    "prog.csv",
     "tacheslignes.csv",
     "TachesSÃ©parÃ©.csv",
 ]
@@ -29,7 +28,6 @@ CSV_LOGICAL = [
     ("competence", "competence.csv"),
     ("pointage", "pointage.csv"),
     ("priorite", "priorite.csv"),
-    ("prog", "prog.csv"),
     ("tacheslignes", "tacheslignes.csv"),
     ("tachessepare", "TachesSÃ©parÃ©.csv"),
 ]

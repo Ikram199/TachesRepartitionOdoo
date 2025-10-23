@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Connexion</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main style="max-width:480px;margin:48px auto;">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <ul class="flash">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+          </ul>
+        {% endif %}
+      {% endwith %}
+      <h1>Connexion</h1>
+      <form method="POST" action="/login" class="db-form">
+        <div class="row">
+          <label for="username">Utilisateur</label>
+          <input type="text" id="username" name="username" autofocus />
+        </div>
+        <div class="row">
+          <label for="password">Mot de passe</label>
+          <input type="password" id="password" name="password" />
+        </div>
+        <div class="actions">
+          <button type="submit">Se connecter</button>
+        </div>
+      </form>
+    </main>
+  </body>
+  </html>
+

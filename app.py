@@ -1,6 +1,6 @@
 ﻿import os
 import json
-from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, flash
+from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, flash, session
 from dotenv import load_dotenv
 
 from db import (
@@ -40,6 +40,46 @@ app.secret_key = (
 )
 # Ensure JSON responses keep accents (UTF-8) instead of ASCII escaping
 app.config['JSON_AS_ASCII'] = False
+
+# -------------------- Auth --------------------
+def _allowed_path(path: str) -> bool:
+    # Public endpoints
+    if path.startswith('/static'):
+        return True
+    if path in {'/login', '/health', '/'}:
+        return True
+    return False
+
+@app.before_request
+def require_login():
+    if _allowed_path(request.path):
+        return
+    if not session.get('auth'):
+        return redirect(url_for('login', next=request.path))
+
+@app.get('/login')
+def login():
+    return render_template('login.html')
+
+@app.post('/login')
+def do_login():
+    user = request.form.get('username', '').strip()
+    pwd = request.form.get('password', '').strip()
+    u_cfg = os.environ.get('ADMIN_USER', 'admin')
+    p_cfg = os.environ.get('ADMIN_PASSWORD', 'admin')
+    if user == u_cfg and pwd == p_cfg:
+        session['auth'] = user
+        flash('Connexion réussie', 'success')
+        nxt = request.args.get('next') or url_for('index')
+        return redirect(nxt)
+    flash('Identifiants invalides', 'error')
+    return redirect(url_for('login'))
+
+@app.get('/logout')
+def logout():
+    session.clear()
+    flash('Déconnecté', 'success')
+    return redirect(url_for('login'))
 
 
 def _truthy(s: str | None) -> bool:
@@ -220,11 +260,7 @@ def db_assign(db: str):
         assign_module.POINTAGE_PATH = paths['pointage']
         assign_module.COMPETENCE_PATH = paths['competence']
         assign_module.PRIORITE_PATH = paths['priorite']
-        # Optional program file
-        prog_path = os.path.join(folder, 'prog.csv')
-        if os.path.exists(prog_path):
-            assign_module.PROG_PATH = prog_path
-        # Force a stable ASCII filename to avoid OS/encoding surprises
+        # Optional program file\n        # Force a stable ASCII filename to avoid OS/encoding surprises
         assign_module.OUTPUT_PATH = os.path.join(folder, 'TachesLignes_assigne.csv')
         assign_module.BACKUP_FMT = os.path.join(folder, 'TachesLignes_backup_{ts}.csv')
         max_per = request.form.get('max') or (request.get_json(silent=True) or {}).get('max')
@@ -349,7 +385,7 @@ def db_csv_template(db: str):
     except Exception:
         w.writerow([f"No headers available for {logical}"])
     data = buf.getvalue().encode('windows-1252', errors='ignore')
-    from flask import send_file as _send
+    from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, flash, session
     return _send(io.BytesIO(data), mimetype='text/csv; charset=windows-1252', as_attachment=True, download_name=f"{logical}_modele.csv")
 
 
@@ -781,11 +817,7 @@ def department_assign(dept: str):
         assign_module.TACHES_PATH = taches
         assign_module.POINTAGE_PATH = pointage
         assign_module.COMPETENCE_PATH = competence
-        assign_module.PRIORITE_PATH = priorite
-        prog_path = os.path.join(dept_dir, 'prog.csv')
-        if os.path.exists(prog_path):
-            assign_module.PROG_PATH = prog_path
-        assign_module.OUTPUT_PATH = output
+        assign_module.PRIORITE_PATH = priorite\n        assign_module.OUTPUT_PATH = output
         assign_module.BACKUP_FMT = os.path.join(dept_dir, backup_fmt)
         # Parse optional params
         if request.method == 'GET':
@@ -827,7 +859,7 @@ def department_csv_template(dept: str):
         # no headers known; write just a comment-like first line
         w.writerow([f"No headers available for {logical}"])
     data = buf.getvalue().encode('windows-1252', errors='ignore')
-    from flask import send_file
+    from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, flash, session
     return send_file(io.BytesIO(data), mimetype='text/csv; charset=windows-1252', as_attachment=True, download_name=f"{logical}_modele.csv")
 
 
@@ -873,7 +905,7 @@ def department_csv_fill_download(dept: str):
         buf = io.StringIO()
         df2.to_csv(buf, index=False, sep=';', encoding='windows-1252')
         data = buf.getvalue().encode('windows-1252', errors='ignore')
-        from flask import send_file
+        from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, flash, session
         suffix = 'filled_assign' if source == 'assign' else 'filled'
         return send_file(io.BytesIO(data), mimetype='text/csv; charset=windows-1252', as_attachment=True, download_name=f"{logical}_{suffix}.csv")
     except Exception as e:
@@ -1028,6 +1060,7 @@ if __name__ == "__main__":
     host = os.environ.get("FLASK_HOST", "127.0.0.1")
     port = int(os.environ.get("FLASK_PORT", "5050"))
     app.run(host=host, port=port)
+
 
 
 
