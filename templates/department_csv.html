@@ -8,7 +8,7 @@
   </head>
   <body>
     <header>
-      <h1>Répartition des ressources</h1>
+      <h1>CSV – {{ dept }}</h1>
       <nav>
         <a href="/">Accueil</a>
         <a href="/departments" class="active">Départements</a>
@@ -26,7 +26,6 @@
       {% endwith %}
       <section>
         <h2>Fichiers du département</h2>
-      </br>
         <table class="grid">
           <thead>
             <tr><th>Type</th><th>Fichier actuel</th><th>Uploader</th><th>Modèle</th></tr>
@@ -46,7 +45,8 @@
                 <a class="btn" href="/departments/{{ dept }}/csv/template?type={{ logical }}&rows=5">Télécharger Modèle</a>
                 {% if logical == 'tachessepare' %}
                 <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
-
+                  <a class="btn" href="/departments/{{ dept }}/csv/fill-download?type={{ logical }}">Remplir par regroupement</a>
+                  <a class="btn" href="/departments/{{ dept }}/csv/fill-download?type={{ logical }}&source=assign">Remplir depuis TachesLignes_assigné</a>
                 </div>
                 {% endif %}
               </td>
@@ -55,7 +55,9 @@
           </tbody>
         </table>
         {% if not file_only %}
-       
+        <form method="POST" action="/departments/{{ dept }}/csv/load" style="margin-top:12px;">
+          <button type="submit">Charger ces CSV dans la base du département</button>
+        </form>
         {% endif %}
       </section>
       <section>

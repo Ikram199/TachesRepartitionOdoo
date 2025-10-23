@@ -827,9 +827,26 @@ def department_assign(dept: str):
             max_per = assign_module.MAX_ASSIGN_PER_RESOURCE_PER_DAY
         else:
             max_per = int(max_per)
+        # Determine response preference (HTML vs JSON)
+        wants_json = (
+            (request.headers.get('Accept', '') or '').startswith('application/json')
+            or request.args.get('json') == '1'
+            or bool(getattr(request, 'is_json', False))
+        )
         assign_module.assign_tasks(max_assign_per_resource_per_day=max_per, start_date=start, end_date=end)
+        if not wants_json and request.method == 'GET':
+            flash('Affectation terminée', 'success')
+            return redirect(url_for('ui_department_csv', dept=dept))
         return jsonify({"ok": True, "dept": dept, "output": output})
     except Exception as e:
+        wants_json_err = (
+            (request.headers.get('Accept', '') or '').startswith('application/json')
+            or request.args.get('json') == '1'
+            or bool(getattr(request, 'is_json', False))
+        )
+        if not wants_json_err and request.method == 'GET':
+            flash(f"Erreur: {e}", 'error')
+            return redirect(url_for('ui_department_csv', dept=dept))
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
