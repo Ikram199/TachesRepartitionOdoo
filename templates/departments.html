@@ -23,7 +23,9 @@
         <ul>
           {% for d in departments %}
           <li><a class="btn" href="/departments/{{ d }}/csv">Gérer CSV – {{ d }}</a></li>
+        </br>
           {% endfor %}
+          
         </ul>
         {% else %}
         <p>Aucun département listé. Configurez ALLOWED_DEPARTMENTS dans .env, ou ouvrez un département ci-dessous.</p>
