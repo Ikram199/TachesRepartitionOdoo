@@ -1,9 +1,9 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>App Web — Répartition</title>
+    <title>App Web - Répartition</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
@@ -15,7 +15,7 @@
         <a href="/departments">Départements</a>
         {% if not file_only %}<a href="/tables">Tables</a>{% endif %}
       </nav>
-      <div id="health" class="pill">Vérification…</div>
+      <div id="health" class="pill">Vérification.</div>
     </header>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
@@ -31,7 +31,7 @@
     </main>
 
     <footer>
-      <small>App Web — Répartition CSV{% if not file_only %} → MySQL{% endif %} & Affectation</small>
+      <small>App Web - Répartition CSV{% if not file_only %} · MySQL{% endif %} & Affectation</small>
     </footer>
 
     <script>window.FILE_ONLY = {{ 'true' if file_only else 'false' }};</script>

@@ -1,14 +1,14 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>CSV â€” {{ db }}</title>
+    <title>CSV – {{ db }}</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <header>
-      <h1>CSV â€” Base {{ db }}</h1>
+      <h1>CSV – Base {{ db }}</h1>
       <nav>
         <a href="/">Accueil</a>
         <a href="/databases" class="active">Bases</a>
@@ -44,7 +44,7 @@
               </td>
               <td>
                 {% set logical = row.logical %}
-                <a class="btn" href="/databases/{{ db }}/csv/template?type={{ logical }}&rows=5">TÃ©lÃ©charger Modèle</a>
+                <a class="btn" href="/databases/{{ db }}/csv/template?type={{ logical }}&rows=5">Télécharger Modèle</a>
               </td>
             </tr>
             {% endfor %}
@@ -57,7 +57,7 @@
 
       {% if results %}
       <section>
-        <h2>RÃ©sultats</h2>
+        <h2>Résultats</h2>
         <pre class="output">{{ results|tojson(indent=2) }}</pre>
       </section>
       {% endif %}
@@ -71,13 +71,11 @@
           <form method="POST" action="/databases/{{ db }}/tachessepare/fill" style="display:inline-block;">
             <button type="submit">2. Recopier ressources par n° de ligne</button>
           </form>
-          <a class="btn" href="/databases/{{ db }}/download/assign" style="margin-left:8px;">Télécharger l’assignation</a>
+          <a class="btn" href="/databases/{{ db }}/download/assign" style="margin-left:8px;">Télécharger l'assignation</a>
           <a class="btn" href="/databases/{{ db }}/download/tachessepare" style="margin-left:8px;">Télécharger tachessepare.csv</a>
         </div>
       </section>
     </main>
   </body>
   </html>
-
-
 

@@ -1,17 +1,17 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>CSV â€” {{ dept }}</title>
+    <title>CSV – {{ dept }}</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <header>
-      <h1>CSV â€” DÃ©partement {{ dept }}</h1>
+      <h1>CSV – Département {{ dept }}</h1>
       <nav>
         <a href="/">Accueil</a>
-        <a href="/departments" class="active">DÃ©partements</a>
+        <a href="/departments" class="active">Départements</a>
       </nav>
     </header>
     <main>
@@ -25,7 +25,7 @@
         {% endif %}
       {% endwith %}
       <section>
-        <h2>Fichiers du dÃ©partement</h2>
+        <h2>Fichiers du département</h2>
         <table class="grid">
           <thead>
             <tr><th>Type</th><th>Fichier actuel</th><th>Uploader</th><th>Modèle</th></tr>
@@ -42,11 +42,11 @@
                 </form>
               </td>
               <td>
-                <a class="btn" href="/departments/{{ dept }}/csv/template?type={{ logical }}&rows=5">TÃ©lÃ©charger Modèle</a>
+                <a class="btn" href="/departments/{{ dept }}/csv/template?type={{ logical }}&rows=5">Télécharger Modèle</a>
                 {% if logical == 'tachessepare' %}
                 <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
                   <a class="btn" href="/departments/{{ dept }}/csv/fill-download?type={{ logical }}">Remplir par regroupement</a>
-                  <a class="btn" href="/departments/{{ dept }}/csv/fill-download?type={{ logical }}&source=assign">Remplir depuis TachesLignes_assignÃ©</a>
+                  <a class="btn" href="/departments/{{ dept }}/csv/fill-download?type={{ logical }}&source=assign">Remplir depuis TachesLignes_assigné</a>
                 </div>
                 {% endif %}
               </td>
@@ -56,7 +56,7 @@
         </table>
         {% if not file_only %}
         <form method="POST" action="/departments/{{ dept }}/csv/load" style="margin-top:12px;">
-          <button type="submit">Charger ces CSV dans la base du dÃ©partement</button>
+          <button type="submit">Charger ces CSV dans la base du département</button>
         </form>
         {% endif %}
       </section>
@@ -66,7 +66,7 @@
           <label>Max/jour
             <input type="number" name="max" min="1" step="1" value="50" style="width:90px; margin-left:6px;"/>
           </label>
-          <label style="margin-left:12px;">Debut
+          <label style="margin-left:12px;">Début
             <input type="date" name="start" style="margin-left:6px;"/>
           </label>
           <label style="margin-left:12px;">Fin
@@ -75,19 +75,18 @@
           <button type="submit" style="margin-left:12px;">Lancer l'affectation</button>
         </form>
         <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-          <a class="btn" href="/download?dept={{ dept }}">Telecharger l'assignation</a>
+          <a class="btn" href="/download?dept={{ dept }}">Télécharger l'assignation</a>
           <a class="btn" href="/departments/{{ dept }}/csv/fill-download?type=tachessepare&source=assign">Remplir tachessepare depuis l'assignation</a>
         </div>
         {% endif %}
       </section>
       {% if results %}
       <section>
-        <h2>RÃ©sultats</h2>
+        <h2>Résultats</h2>
         <pre class="output">{{ results|tojson(indent=2) }}</pre>
       </section>
       {% endif %}
     </main>
   </body>
   </html>
-
 

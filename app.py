@@ -1,4 +1,4 @@
-import os
+﻿import os
 import json
 from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, flash
 from dotenv import load_dotenv
@@ -243,10 +243,10 @@ def db_fill_tachessepare(db: str):
         # Robustly locate assignment file in the folder
         candidates = [
             'TachesLignes_assigne.csv',
-            'TachesLignes_assigné.csv',
+            'TachesLignes_assigne.csv',
             'TachesLignes_assigne.csv',
             'TachesLignes_assign.csv',
-            'TachesLignes_assignǸ.csv',
+            'TachesLignes_assignÇ¸.csv',
         ]
         asg_path = None
         for name in candidates:
@@ -272,15 +272,15 @@ def db_fill_tachessepare(db: str):
 
 @app.get("/databases/<db>/download/assign")
 def db_download_assign(db: str):
-    """Télécharger le fichier d'assignation généré pour cette base."""
+    """Télécharger le fichier d'assignation gÃ©nÃ©rÃ© pour cette base."""
     folder = _db_folder(db)
     # Try common assignment filenames within the DB folder
     candidates = [
         'TachesLignes_assigne.csv',
-        'TachesLignes_assigné.csv',
+        'TachesLignes_assigne.csv',
         'TachesLignes_assigne.csv',
         'TachesLignes_assign.csv',
-        'TachesLignes_assignǸ.csv',
+        'TachesLignes_assignÇ¸.csv',
     ]
     path = None
     for name in candidates:
@@ -411,7 +411,7 @@ def download_assigned():
     if assign_module is not None and getattr(assign_module, "OUTPUT_PATH", None):
         expected_name = assign_module.OUTPUT_PATH
     else:
-        expected_name = "TachesLignes_assignÃ©.csv"
+        expected_name = "TachesLignes_assigne.csv"
 
     here = os.path.dirname(os.path.abspath(__file__))
     parent = os.path.abspath(os.path.join(here, os.pardir))
@@ -429,7 +429,7 @@ def download_assigned():
             filename = p
             break
     if not filename:
-        return jsonify({"ok": False, "error": "Fichier non trouvÃ©"}), 404
+        return jsonify({"ok": False, "error": "Fichier non trouvé"}), 404
 
     try:
         return send_file(
@@ -566,7 +566,7 @@ def upload_post():
         flash("Aucun fichier fourni", "error")
         return redirect(url_for('ui_upload'))
 
-    # Nouveau flux: sauvegarde orientÃ©e dÃ©partement et ingestion
+    # Nouveau flux: sauvegarde orientÃƒÂ©e dÃƒÂ©partement et ingestion
     f = request.files['file']
     if not f.filename:
         flash("Nom de fichier vide", "error")
@@ -617,7 +617,7 @@ def upload_post():
         return redirect(url_for('ui_upload'))
 
 
-# Mode simple: choisir/crÃ©er la base du dÃ©partement et charger tous les CSV
+# Mode simple: choisir/crÃƒÂ©er la base du dÃƒÂ©partement et charger tous les CSV
 @app.post("/simple/load")
 @app.get("/simple/load")
 def simple_load():
@@ -625,7 +625,7 @@ def simple_load():
         payload = request.get_json(silent=True) or {}
         dept = request.args.get("dept") or payload.get("dept")
         if not dept:
-            return jsonify({"ok": False, "error": "ParamÃ¨tre 'dept' requis"}), 400
+            return jsonify({"ok": False, "error": "Paramètre 'dept' requis"}), 400
         if single_db_mode():
             qname = os.environ.get("MYSQL_DB") or ""
             engine = get_engine()
@@ -676,7 +676,7 @@ def db_derive_departments():
 @app.get("/departments/<dept>/csv")
 def ui_department_csv(dept: str):
     if not is_allowed_department(dept):
-        flash("DÃ©partement non autorisÃ©", "error")
+        flash("Département non autorisé", "error")
         return redirect(url_for('ui_departments'))
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
     # Ensure the department upload directory exists so uploads work immediately (respects UPLOADS_DIR)
@@ -689,7 +689,7 @@ def ui_department_csv(dept: str):
 @app.post("/departments/<dept>/csv/upload")
 def department_csv_upload(dept: str):
     if not is_allowed_department(dept):
-        return jsonify({"ok": False, "error": "DÃ©partement non autorisÃ©"}), 403
+        return jsonify({"ok": False, "error": "Département non autorisé"}), 403
     logical = request.args.get('type') or request.form.get('type')
     if not logical or logical not in dict(CSV_LOGICAL):
         return jsonify({"ok": False, "error": "Type invalide"}), 400
@@ -702,14 +702,14 @@ def department_csv_upload(dept: str):
     os.makedirs(uploads_dir, exist_ok=True)
     save_path = os.path.join(uploads_dir, f"{logical}.csv")
     f.save(save_path)
-    flash(f"Fichier '{logical}' importÃ© pour {dept}", "success")
+    flash(f"Fichier '{logical}' importé pour {dept}", "success")
     return redirect(url_for('ui_department_csv', dept=dept))
 
 
 @app.post("/departments/<dept>/csv/load")
 def department_csv_load(dept: str):
     if not is_allowed_department(dept):
-        return jsonify({"ok": False, "error": "DÃ©partement non autorisÃ©"}), 403
+        return jsonify({"ok": False, "error": "Département non autorisé"}), 403
     if single_db_mode():
         engine = get_engine()
     else:
@@ -720,7 +720,7 @@ def department_csv_load(dept: str):
     try:
         results = load_department_bundle(engine, department=dept, table_prefix=None, base_dir=base_dir, strict=True)
         ok = all(r.get('status') == 'loaded' for r in results if r.get('status') != 'missing')
-        flash("Chargement effectuÃ©", "success" if ok else "error")
+        flash("Chargement effectué", "success" if ok else "error")
         return render_template("department_csv.html", dept=dept, files=CSV_LOGICAL, paths=resolve_dept_csv_paths(dept, base_dir=base_dir, strict=True), results=results)
     except Exception as e:
         flash(f"Erreur: {e}", "error")
@@ -733,7 +733,7 @@ def departments_open():
         flash("Saisissez un nom de département", "error")
         return redirect(url_for('ui_departments'))
     if not is_allowed_department(name):
-        flash("DǸpartement non autorisǸ", "error")
+        flash("DÇ¸partement non autorisÇ¸", "error")
         return redirect(url_for('ui_departments'))
     return redirect(url_for('ui_department_csv', dept=name))
 
@@ -742,7 +742,7 @@ def departments_open():
 @app.get("/departments/<dept>/assign")
 def department_assign(dept: str):
     if not is_allowed_department(dept):
-        return jsonify({"ok": False, "error": "Départment non autorisé"}), 403
+        return jsonify({"ok": False, "error": "Département non autorisé"}), 403
     if assign_module is None:
         return jsonify({"ok": False, "error": f"Cannot import run.py: {ASSIGN_IMPORT_ERROR}"}), 500
     # Compute department-specific file paths (strict: no fallback to root)
@@ -770,7 +770,7 @@ def department_assign(dept: str):
     pointage = required['pointage']
     competence = required['competence']
     priorite = required['priorite']
-    output = os.path.join(dept_dir, getattr(assign_module, 'OUTPUT_PATH', 'TachesLignes_assignǸ.csv'))
+    output = os.path.join(dept_dir, getattr(assign_module, 'OUTPUT_PATH', 'TachesLignes_assignÇ¸.csv'))
     backup_fmt = getattr(assign_module, 'BACKUP_FMT', 'TachesLignes_backup_{ts}.csv')
     # Override module-level paths for this call
     try:
@@ -798,7 +798,7 @@ def department_assign(dept: str):
 @app.get("/departments/<dept>/csv/template")
 def department_csv_template(dept: str):
     if not is_allowed_department(dept):
-        return jsonify({"ok": False, "error": "DÃ©partement non autorisÃ©"}), 403
+        return jsonify({"ok": False, "error": "Département non autorisé"}), 403
     logical = request.args.get('type')
     try:
         rows = int(request.args.get('rows', '5'))
@@ -827,7 +827,7 @@ def department_csv_template(dept: str):
 @app.get("/departments/<dept>/csv/fill-download")
 def department_csv_fill_download(dept: str):
     if not is_allowed_department(dept):
-        return jsonify({"ok": False, "error": "DÃ©partement non autorisÃ©"}), 403
+        return jsonify({"ok": False, "error": "Département non autorisé"}), 403
     logical = request.args.get('type', 'tachessepare')
     if logical not in dict(CSV_LOGICAL):
         return jsonify({"ok": False, "error": "Type invalide"}), 400
@@ -846,10 +846,10 @@ def department_csv_fill_download(dept: str):
             dept_dir = os.path.join(uploads_dir_base(), 'departments', dept)
             candidates = [
                 'TachesLignes_assigne.csv',
-                'TachesLignes_assigné.csv',
+                'TachesLignes_assigne.csv',
                 'TachesLignes_assign.csv',
-                'TachesLignes_assignÃ©.csv',
-                'TachesLignes_assignǸ.csv',
+                'TachesLignes_assigne.csv',
+                'TachesLignes_assignÇ¸.csv',
             ]
             assign_path = None
             for name in candidates:
@@ -879,9 +879,9 @@ def db_create_and_init():
     try:
         name = request.args.get("name") if request.method == 'GET' else (request.get_json(silent=True) or {}).get("name")
         if not name:
-            return jsonify({"ok": False, "error": "ParamÃ¨tre 'name' requis"}), 400
+            return jsonify({"ok": False, "error": "Paramètre 'name' requis"}), 400
         if not is_allowed_department(name):
-            return jsonify({"ok": False, "error": "DÃ©partement non autorisÃ©"}), 403
+            return jsonify({"ok": False, "error": "Département non autorisé"}), 403
         qname = qualify_db_name(name)
         ensure_database_exists(qname)
         set_current_database(qname)
@@ -900,9 +900,9 @@ def db_switch():
     try:
         name = request.args.get("name") if request.method == 'GET' else (request.get_json(silent=True) or {}).get("name")
         if not name:
-            return jsonify({"ok": False, "error": "ParamÃ¨tre 'name' requis"}), 400
+            return jsonify({"ok": False, "error": "Paramètre 'name' requis"}), 400
         if not is_allowed_department(name):
-            return jsonify({"ok": False, "error": "DÃ©partement non autorisÃ©"}), 403
+            return jsonify({"ok": False, "error": "Département non autorisé"}), 403
         qname = qualify_db_name(name)
         set_current_database(qname)
         # Probe connection
@@ -939,9 +939,9 @@ def db_copy_schema():
         source = request.args.get("source") if request.method == 'GET' else (request.get_json(silent=True) or {}).get("source")
         target = request.args.get("target") if request.method == 'GET' else (request.get_json(silent=True) or {}).get("target")
         if not source or not target:
-            return jsonify({"ok": False, "error": "ParamÃ¨tres 'source' et 'target' requis"}), 400
+            return jsonify({"ok": False, "error": "Paramètres 'source' et 'target' requis"}), 400
         if not (is_allowed_department(source) and is_allowed_department(target)):
-            return jsonify({"ok": False, "error": "DÃ©partements non autorisÃ©s"}), 403
+            return jsonify({"ok": False, "error": "Départements non autorisés"}), 403
         # Qualify within namespace and validate allowed
         src_q = qualify_db_name(source)
         dst_q = qualify_db_name(target)
@@ -981,7 +981,7 @@ def db_drop():
     try:
         raw = request.args.get("name") if request.method == 'GET' else (request.get_json(silent=True) or {}).get("name")
         if not raw:
-            return jsonify({"ok": False, "error": "ParamÃ¨tre 'name' requis"}), 400
+            return jsonify({"ok": False, "error": "Paramètre 'name' requis"}), 400
         ns = db_namespace()
         low = raw.strip().lower()
         prefix = f"{ns}_"
@@ -989,7 +989,7 @@ def db_drop():
         if low.startswith(prefix):
             short = raw[len(prefix):]
         if not is_allowed_department(short):
-            return jsonify({"ok": False, "error": "DÃ©partement non autorisÃ©"}), 403
+            return jsonify({"ok": False, "error": "Département non autorisé"}), 403
         qname = qualify_db_name(short)
         # Safety: only allow dropping databases within namespace
         if not is_allowed_db(qname):
@@ -1006,7 +1006,7 @@ def db_drop():
 @app.post("/departments/<dept>/prepare")
 def department_prepare(dept: str):
     if not is_allowed_department(dept):
-        return jsonify({"ok": False, "error": "Départment non autorisé"}), 403
+        return jsonify({"ok": False, "error": "Département non autorisé"}), 403
     try:
         dept_dir = os.path.join(uploads_dir_base(), 'departments', dept)
         os.makedirs(dept_dir, exist_ok=True)
@@ -1021,3 +1021,6 @@ if __name__ == "__main__":
     host = os.environ.get("FLASK_HOST", "127.0.0.1")
     port = int(os.environ.get("FLASK_PORT", "5050"))
     app.run(host=host, port=port)
+
+
+
