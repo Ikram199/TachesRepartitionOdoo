@@ -1,390 +1,379 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Algorithm module loaded by the app to assign tasks to resources.
+
+Implements the logic you provided:
+- Detect target dates from 'Jour' in tacheslignes
+- Build availability by shift from Pointage
+- Validate competencies from competence
+- Order tasks by priorities from priorite
+- Respect a per‑resource daily cap
+
+Encoding: windows-1252, separator: ';'
+The app overrides the module constants below before calling assign_tasks().
+"""
+
 from __future__ import annotations
 
-import os
-import time
-import unicodedata
-from typing import Dict, List, Optional, Tuple, Set
 import re
+import os
+from datetime import datetime, timedelta
+from collections import defaultdict, Counter
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
-# Defaults (overridden by app.py when running from the UI)
-ENCODING = "windows-1252"
-SEP = ";"
+# Defaults (overridden by the app before calling assign_tasks)
+TACHES_PATH = 'tacheslignes.csv'
+POINTAGE_PATH = 'pointage.csv'
+COMPETENCE_PATH = 'competence.csv'
+PRIORITE_PATH = 'priorite.csv'
+OUTPUT_PATH = 'TachesLignes_assigne.csv'  # keep ASCII filename for portability
+BACKUP_FMT = 'TachesLignes_backup_{ts}.csv'
+ENCODING = 'windows-1252'
+SEP = ';'
 
-TACHES_PATH = "tacheslignes.csv"
-POINTAGE_PATH = "pointage.csv"
-PROG_PATH = "prog.csv"
-COMPETENCE_PATH = "competence.csv"
-PRIORITE_PATH = "priorite.csv"
-
-# Output files (can be overridden by the app)
-OUTPUT_PATH = "TachesLignes_assigne.csv"
-BACKUP_FMT = "TachesLignes_backup_{ts}.csv"
-
-# Simple guardrail for assignment capacity
-MAX_ASSIGN_PER_RESOURCE_PER_DAY = 50
+# Max assignments per resource per day (change as needed)
+MAX_ASSIGN_PER_RESOURCE_PER_DAY = 1
 
 
-def _ascii_fold(s: str) -> str:
-    return unicodedata.normalize("NFKD", s).encode("ASCII", "ignore").decode("ASCII")
+def _norm_name(n: object) -> str:
+    if pd.isna(n):
+        return ''
+    return re.sub(r"\s+", " ", str(n).strip()).upper()
 
 
-def _low(s: object) -> str:
-    return _ascii_fold(str(s or "")).strip().lower()
+def _detect_date_from_value(v: object) -> Optional[datetime.date]:
+    if pd.isna(v):
+        return None
+    s = str(v)
+    m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", s)
+    if m:
+        d, mo, y = m.groups()
+        try:
+            return datetime(int(y), int(mo), int(d)).date()
+        except Exception:
+            return None
+    dt = pd.to_datetime(s, dayfirst=True, errors='coerce')
+    if pd.isna(dt):
+        return None
+    return dt.date()
 
 
-def _find_col(cols: List[str], *needles: str) -> Optional[str]:
-    for c in cols:
-        low = _low(c)
-        if all(n in low for n in needles):
-            return c
-    return None
+def _norm_row_date(v: object) -> Optional[datetime.date]:
+    try:
+        return _detect_date_from_value(v)
+    except Exception:
+        return None
 
 
-def _load_csv(path: str, nrows: Optional[int] = None) -> pd.DataFrame:
-    return pd.read_csv(path, encoding=ENCODING, sep=SEP, nrows=nrows)
+def load_competences(path: str = COMPETENCE_PATH) -> Dict[str, set]:
+    """Return mapping NORMALIZED_EMPLOYEE_NAME -> set of competence codes.
 
-
-def _codes_from_value(v: object) -> Set[str]:
-    s = str(v or "").strip()
-    if not s:
-        return set()
-    # Split on non-alnum separators (space, /, -, , ; etc.)
-    toks = re.findall(r"[A-Za-z0-9]+", s.upper())
-    return set(toks)
-
-
-def _extract_competences(df_comp: pd.DataFrame) -> Dict[str, set]:
-    """Return mapping resource -> set(competences).
-
-    Column heuristics:
-    - Resource column: contains one of ['ressource', 'nom prenom', 'nom prénom', 'nom', 'employe', 'employé']
-    - Competence columns: any column containing ['qualif', 'compet', 'certif'] (multi-columns supported)
+    Heuristics:
+    - employee column: contains 'emp', 'nom', 'employ'
+    - competence columns: any column containing 'comp' or 'qual', excluding those with 'type'
+    Multiple columns and multiple codes per cell are supported (split by non-alnum).
     """
-    if df_comp is None or df_comp.empty:
-        return {}
-    cols = list(df_comp.columns)
-    # Detect resource column
-    res_col = (
-        _find_col(cols, "ressource")
-        or _find_col(cols, "nom", "prenom")
-        or _find_col(cols, "nom", "prénom")
-        or _find_col(cols, "employe")
-        or _find_col(cols, "employé")
-        or _find_col(cols, "nom")
-    )
-    if res_col is None:
-        return {}
-    # Detect competence columns (can be multiple: Qualif 1/2/3, etc.)
-    comp_cols: List[str] = []
-    for c in cols:
-        low = _low(c)
-        if any(k in low for k in ["qualif", "compet", "certif"]):
-            comp_cols.append(c)
-    groups: Dict[str, set] = {}
+    d: Dict[str, set] = {}
+    try:
+        df = pd.read_csv(path, encoding=ENCODING, sep=SEP)
+    except Exception:
+        return d
+
+    emp_col = next((c for c in df.columns if any(k in str(c).lower() for k in ('emp', 'nom', 'employ'))), None)
+    comp_cols = [c for c in df.columns if (('comp' in str(c).lower() or 'qual' in str(c).lower()) and 'type' not in str(c).lower())]
+
+    if emp_col is None:
+        if len(df.columns) >= 1:
+            emp_col = df.columns[0]
+        else:
+            return d
     if not comp_cols:
-        # Treat as all-rounders (no explicit competence)
-        for r in df_comp[res_col].dropna().astype(str).map(str.strip).tolist():
-            if r:
-                groups.setdefault(r, set())
-        return groups
-    for _, row in df_comp.iterrows():
-        r = str(row.get(res_col, "")).strip()
-        if not r:
-            continue
-        groups.setdefault(r, set())
-        for c in comp_cols:
-            codes = _codes_from_value(row.get(c))
-            if codes:
-                groups[r].update(codes)
-    return groups
+        if len(df.columns) >= 2:
+            comp_cols = [df.columns[1]]
+        else:
+            return d
 
-
-def _extract_program(df_prog: pd.DataFrame) -> List[Tuple[str, str, str]]:
-    """Return a list of (resource, date_str, vacation_code) tuples marking availability.
-
-    Heuristics for columns: resource (ressource|nom prénom|employé), date (jour|date), vacation (vacation|shift|code).
-    Dates are normalized as YYYY-MM-DD strings.
-    """
-    if df_prog is None or df_prog.empty:
-        return []
-    cols = list(df_prog.columns)
-    res_col = (
-        _find_col(cols, "ressource")
-        or _find_col(cols, "nom", "prenom")
-        or _find_col(cols, "nom", "prénom")
-        or _find_col(cols, "employe")
-        or _find_col(cols, "employé")
-        or _find_col(cols, "nom")
-    )
-    date_col = _find_col(cols, "jour") or _find_col(cols, "date")
-    vac_col = _find_col(cols, "vacation") or _find_col(cols, "shift") or _find_col(cols, "code")
-    if res_col is None or date_col is None or vac_col is None:
-        return []
-    out: List[Tuple[str, str, str]] = []
-    for _, row in df_prog.iterrows():
-        r = str(row.get(res_col, "")).strip()
-        if not r:
-            continue
+    for _, r in df.iterrows():
         try:
-            d = pd.to_datetime(row.get(date_col)).date().isoformat()
+            nom = _norm_name(r[emp_col])
+            if not nom or nom.upper() == 'NAN':
+                continue
+            for c in comp_cols:
+                raw = r.get(c, '')
+                if pd.isna(raw):
+                    continue
+                # split on non-alphanumeric
+                codes = set(re.findall(r"[A-Za-z0-9]+", str(raw).upper()))
+                if codes:
+                    d.setdefault(nom, set()).update(codes)
         except Exception:
-            d = str(row.get(date_col, "")).strip()
-        v = str(row.get(vac_col, "")).strip()
-        if not d:
             continue
-        out.append((r, d, v))
-    return out
+    return d
 
 
-def _extract_tasks(df_tasks: pd.DataFrame) -> Tuple[pd.DataFrame, Optional[str], Optional[str]]:
-    """Return (df, line_col, need_comp_col)
-
-    - line_col: column that identifies a task row number (e.g., 'Ligne de planche')
-    - need_comp_col: column containing a competence requirement if present
-    """
-    if df_tasks is None or df_tasks.empty:
-        return df_tasks, None, None
-    cols = list(df_tasks.columns)
-    line_col = None
-    # Prefer both 'ligne' and 'planche' in the header; else any header starting by 'ligne'
-    line_col = _find_col(cols, "ligne", "planche") or next(
-        (c for c in cols if _low(c).startswith("ligne")), None
-    )
-    # Required competence: prefer Qualif 1, then Qualif 2/3; else any 'competence'
-    qual_cols = [c for c in cols if "qualif" in _low(c)]
-    need_comp_col = qual_cols[0] if qual_cols else _find_col(cols, "competence")
-    return df_tasks.copy(), line_col, need_comp_col
-
-
-def _sort_tasks(df: pd.DataFrame) -> pd.DataFrame:
-    # Try to sort by priority if present; otherwise leave as-is
-    prio = _find_col(list(df.columns), "priorite")
-    if prio and df[prio].notna().any():
+def load_priorites(path: str = PRIORITE_PATH) -> Dict[str, int]:
+    """Map competence code -> priority (int, lower is higher priority)."""
+    pr: Dict[str, int] = {}
+    try:
+        df = pd.read_csv(path, encoding=ENCODING, sep=SEP)
+    except Exception:
+        return pr
+    key_col = next((c for c in df.columns if any(k in str(c).lower() for k in ('nom', 'code', 'comp'))), None)
+    val_col = next((c for c in df.columns if any(k in str(c).lower() for k in ('prior', 'val', 'niveau'))), None)
+    if key_col is None or val_col is None:
+        if len(df.columns) >= 2:
+            key_col, val_col = df.columns[0], df.columns[1]
+        else:
+            return pr
+    for _, r in df.iterrows():
         try:
-            return df.sort_values(by=[prio])
+            k = str(r[key_col]).strip().upper()
+            v = r[val_col]
+            if not k or pd.isna(v):
+                continue
+            try:
+                v = int(v)
+            except Exception:
+                try:
+                    v = int(float(v))
+                except Exception:
+                    continue
+            pr[k] = v
         except Exception:
-            return df
-    return df
+            continue
+    return pr
+
+
+def build_available_from_pointage(pointage_path: str = POINTAGE_PATH, target_date: Optional[datetime.date] = None) -> Tuple[Dict[str, List[str]], Dict[str, str]]:
+    """Return (shift -> [normalized resources], normalized->original name mapping) for the target date."""
+    try:
+        df = pd.read_csv(pointage_path, encoding=ENCODING, sep=SEP)
+    except Exception:
+        return {}, {}
+
+    # Detect columns
+    date_col = next((c for c in df.columns if 'date' in str(c).lower()), None)
+    res_cols = [c for c in df.columns if ('ressource' in str(c).lower() or str(c).lower() in ('res', 'resource', 'employe', 'employé', 'nom', 'nom prénom', 'nom_prénom'))]
+    shift_col = next((c for c in df.columns if (str(c).lower() in ('shift', 'nom shift', 'nom_shift') or 'shift' in str(c).lower() or 'vacation' in str(c).lower())), None)
+    if date_col is None or not res_cols or shift_col is None:
+        return {}, {}
+
+    def _score_res_col(col) -> float:
+        cnt, total = 0, 0
+        for v in df[col].dropna().head(200):
+            s = str(v)
+            total += 1
+            if re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ]", s):
+                cnt += 1
+        return cnt / total if total else 0
+
+    res_col = max(res_cols, key=_score_res_col)
+    df[date_col] = pd.to_datetime(df[date_col], dayfirst=True, errors='coerce')
+    df['__date_only'] = df[date_col].dt.date
+
+    if target_date is None:
+        dates = df['__date_only'].dropna().unique()
+        target_date = dates[0] if len(dates) > 0 else None
+    if target_date is None:
+        return {}, {}
+
+    df_day = df[df['__date_only'] == target_date]
+    shift_to_resources: Dict[str, List[str]] = defaultdict(list)
+    norm_to_orig: Dict[str, str] = {}
+    for _, r in df_day.iterrows():
+        try:
+            shift = str(r[shift_col]).strip()
+            res = str(r[res_col]).strip()
+            if not shift or not res or shift.lower() == 'nan' or res.lower() == 'nan':
+                continue
+            n = _norm_name(res)
+            norm_to_orig.setdefault(n, res)
+            if n not in shift_to_resources[shift]:
+                shift_to_resources[shift].append(n)
+        except Exception:
+            continue
+    return dict(shift_to_resources), norm_to_orig
 
 
 def assign_tasks(max_assign_per_resource_per_day: int = MAX_ASSIGN_PER_RESOURCE_PER_DAY,
                  start_date: Optional[str] = None,
                  end_date: Optional[str] = None) -> str:
-    """Very simple, deterministic assignment:
+    # Load tasks
+    df_t = pd.read_csv(TACHES_PATH, encoding=ENCODING, sep=SEP)
 
-    - Build candidate resource set from competence.csv
-    - Sort tasks by 'priorite' if present
-    - For each task, pick the first resource that matches competence (if any);
-      otherwise pick the least-loaded resource
-    - Write an output CSV containing the original tasks plus a 'Ressource_affecte' column
-    - Backup any previous output
-    """
-    # Load CSVs
-    df_tasks = _load_csv(TACHES_PATH)
-    df_comp = _load_csv(COMPETENCE_PATH) if os.path.exists(COMPETENCE_PATH) else pd.DataFrame()
-    df_prog = _load_csv(PROG_PATH) if os.path.exists(PROG_PATH) else pd.DataFrame()
-    df_prio = _load_csv(PRIORITE_PATH) if os.path.exists(PRIORITE_PATH) else pd.DataFrame()
+    # Normalize per-row dates
+    if 'Jour' not in df_t.columns:
+        raise ValueError("Colonne 'Jour' manquante dans tacheslignes")
+    df_t['__date_only'] = df_t['Jour'].apply(_norm_row_date)
 
-    df_tasks, line_col, need_comp_col = _extract_tasks(df_tasks)
-    if line_col is None:
-        # Ensure there is some line identifier to help downstream joins
-        line_col = "Ligne de planche"
-        if line_col not in df_tasks.columns:
-            df_tasks.insert(0, line_col, range(1, len(df_tasks) + 1))
-
-    # Build resources and their competences
-    res_to_comp = _extract_competences(df_comp)
-    resources = list(res_to_comp.keys())
-    if not resources:
-        # Fallback attempt: derive resources from pointage if present
-        try:
-            df_pt = _load_csv(POINTAGE_PATH)
-            res_col = (
-                _find_col(list(df_pt.columns), "ressource")
-                or _find_col(list(df_pt.columns), "nom", "prenom")
-                or _find_col(list(df_pt.columns), "nom", "prénom")
-                or _find_col(list(df_pt.columns), "employe")
-                or _find_col(list(df_pt.columns), "employé")
-            )
-            if res_col:
-                resources = (
-                    df_pt[res_col].dropna().astype(str).map(str.strip).drop_duplicates().tolist()
-                )
-        except Exception:
-            pass
-    if not resources:
-        resources = ["R1", "R2", "R3"]
-    loads: Dict[str, int] = {r: 0 for r in resources}
-
-    # Sort tasks for deterministic output
-    # Merge priorities if provided and not already present
-    try:
-        if ("priorite" not in [ _low(c) for c in df_tasks.columns ]) and not df_prio.empty:
-            # Try merge by line number
-            cols = list(df_prio.columns)
-            pr_line = _find_col(cols, "ligne") or next((c for c in cols if _low(c).startswith("ligne")), None)
-            pr_col = _find_col(cols, "priorite")
-            if pr_line and pr_col:
-                df_tasks = df_tasks.merge(df_prio[[pr_line, pr_col]], left_on=line_col, right_on=pr_line, how='left')
-    except Exception:
-        pass
-
-    df_sorted = _sort_tasks(df_tasks)
-
-    # Prepare assignment column
-    out_col = "Ressource_affecte"
-    if out_col in df_sorted.columns:
-        out_col = out_col  # reuse
+    # Build list of dates to process
+    if start_date and end_date:
+        # Accept 'dd/mm/YYYY' or ISO 'YYYY-mm-dd'
+        def _to_date(s: str) -> datetime.date:
+            try:
+                return datetime.strptime(s, '%d/%m/%Y').date()
+            except Exception:
+                return datetime.fromisoformat(s).date()
+        dt_start = _to_date(start_date)
+        dt_end = _to_date(end_date)
+        dates = []
+        cur = dt_start
+        while cur <= dt_end:
+            dates.append(cur)
+            cur = cur + timedelta(days=1)
     else:
-        df_sorted[out_col] = ""
+        uniques = sorted([d for d in df_t['__date_only'].unique() if d is not None])
+        if not uniques:
+            raise ValueError('Impossible de détecter des dates dans tacheslignes')
+        dates = uniques
 
-    # Build availability index from program
-    prog_index = set(_extract_program(df_prog)) if not df_prog.empty else set()
-    date_col = _find_col(list(df_sorted.columns), "jour") or _find_col(list(df_sorted.columns), "date")
-    vac_col = _find_col(list(df_sorted.columns), "vacation") or _find_col(list(df_sorted.columns), "shift") or _find_col(list(df_sorted.columns), "code")
+    emp_to_comps = load_competences(COMPETENCE_PATH)
+    priorites = load_priorites(PRIORITE_PATH)
 
-    # Track loads per resource per day
-    loads: Dict[Tuple[str, str], int] = {}
+    # Build competence->resources reverse map
+    comp_to_emps: Dict[str, List[str]] = defaultdict(list)
+    for emp, comps in emp_to_comps.items():
+        for c in comps:
+            comp_to_emps[c].append(emp)
 
-    def pick_resource(required: Optional[str], date_str: Optional[str], vacation: Optional[str]) -> str:
-        req = (required or "").strip()
-        # 1) Try exact competence match among least-loaded
-        if req:
-            candidates = [r for r in resources if (not res_to_comp.get(r)) or (req in res_to_comp.get(r, set()))]
-        else:
-            candidates = list(resources)
-        # 2) Filter by program availability if provided
-        if prog_index and date_str:
-            cand2 = []
-            for r in candidates:
-                key_any = (r, date_str, "")
-                has_day = any((rr == r and dd == date_str) for rr, dd, _ in prog_index)
-                ok = False
-                if vacation:
-                    ok = (r, date_str, vacation) in prog_index
-                ok = ok or (has_day and not vacation)
-                if ok:
-                    cand2.append(r)
-            if cand2:
-                candidates = cand2
-        # Order by current load to keep distribution fair
-        key_date = date_str or ""
-        candidates.sort(key=lambda r: loads.get((r, key_date), 0))
-        chosen = candidates[0] if candidates else resources[0]
-        # Respect a soft cap per resource/day if provided
-        cap_key = (chosen, key_date)
-        if max_assign_per_resource_per_day and loads.get(cap_key, 0) >= max_assign_per_resource_per_day:
-            # choose next one with lower load
-            for r in candidates:
-                if loads.get((r, key_date), 0) < max_assign_per_resource_per_day:
-                    chosen = r
+    # Identify qualif columns
+    qual_keys = [c for c in df_t.columns if str(c).strip().lower().startswith('qualif')]
+
+    def _qual_list_for_row(row) -> List[str]:
+        quals: List[str] = []
+        for k in qual_keys:
+            v = row.get(k, '')
+            if pd.isna(v):
+                continue
+            parts = re.findall(r"[A-Za-z0-9]+", str(v).upper())
+            quals.extend(parts)
+        return [q for q in quals if q]
+
+    def _task_priority(quals: List[str]) -> int:
+        if not quals:
+            return 999
+        vals = [priorites[q] for q in quals if q in priorites]
+        return min(vals) if vals else 999
+
+    # Prepare output container
+    df_out = df_t.copy()
+    if 'Ressource_affectee' not in df_out.columns:
+        df_out['Ressource_affectee'] = ''
+
+    total_assigned = 0
+
+    for target in dates:
+        # Availability for target date
+        shift_to_resources, norm_to_orig = build_available_from_pointage(POINTAGE_PATH, target)
+
+        # Build tasks for target
+        tasks: List[Dict] = []
+        for idx, row in df_t[df_t['__date_only'] == target].iterrows():
+            quals = _qual_list_for_row(row)
+            # Detect shift/vacation column
+            shift = None
+            for col in ['Vacation', 'Shift', 'Nom Shift', 'Nom_Shift']:
+                if col in df_t.columns:
+                    shift = row.get(col)
                     break
-        loads[cap_key] = loads.get(cap_key, 0) + 1
-        return chosen
-
-    # Perform assignment
-    # Build required competence sets per task (union of non-empty Qualif cols)
-    req_sets: List[Set[str]] = []
-    qual_cols = [c for c in df_sorted.columns if "qualif" in _low(c)]
-    if qual_cols:
-        for _, row in df_sorted.iterrows():
-            codes: Set[str] = set()
-            for c in qual_cols:
-                codes.update(_codes_from_value(row.get(c)))
-            req_sets.append(codes)
-    elif need_comp_col and need_comp_col in df_sorted.columns:
-        for _, row in df_sorted.iterrows():
-            req_sets.append(_codes_from_value(row.get(need_comp_col)))
-    else:
-        req_sets = [set() for _ in range(len(df_sorted))]
-    else:
-        comps = [None] * len(df_sorted)
-    assigned: List[str] = []
-    for idx, req_set in enumerate(req_sets):
-        dstr = None
-        vcode = None
-        if date_col and date_col in df_sorted.columns:
-            try:
-                dstr = pd.to_datetime(df_sorted.iloc[idx][date_col]).date().isoformat()
-            except Exception:
-                dstr = str(df_sorted.iloc[idx][date_col]).strip()
-        if vac_col and vac_col in df_sorted.columns:
-            vcode = str(df_sorted.iloc[idx][vac_col]).strip()
-        # Transform set to something pick_resource understands: keep set
-        def pick_with_set(required: Set[str], date_str: Optional[str], vacation: Optional[str]) -> str:
-            # Build candidate list using intersect logic
-            if required:
-                candidates = []
-                for r in resources:
-                    comps = res_to_comp.get(r, set())
-                    if not comps:
-                        candidates.append(r)  # all-rounder
-                    elif comps.intersection(required):
-                        candidates.append(r)
-            else:
-                candidates = list(resources)
-            # Apply program availability filter and load balancing using pick_resource core
-            # Reuse pick_resource logic by passing one arbitrary code from required (or None)
-            any_code = next(iter(required)) if required else None
-            # Temporarily narrow global resources to candidates
-            saved = list(resources)
-            try:
-                nonlocal_resources = candidates
-            except Exception:
-                nonlocal_resources = None
-            # Inline simplified selection using same mechanics
-            # Order by per-day load
-            key_date = date_str or ""
-            # Filter by program
-            if prog_index and date_str:
-                cand2 = []
-                for r in candidates:
-                    has_day = any((rr == r and dd == date_str) for rr, dd, _ in prog_index)
-                    ok = False
-                    if vacation:
-                        ok = (r, date_str, vacation) in prog_index
-                    ok = ok or (has_day and not vacation)
-                    if ok:
-                        cand2.append(r)
-                if cand2:
-                    candidates = cand2
-            if not candidates:
-                candidates = saved
-            candidates.sort(key=lambda r: loads.get((r, key_date), 0))
-            chosen = candidates[0]
-            cap_key = (chosen, key_date)
-            if max_assign_per_resource_per_day and loads.get(cap_key, 0) >= max_assign_per_resource_per_day:
-                for r in candidates:
-                    if loads.get((r, key_date), 0) < max_assign_per_resource_per_day:
-                        chosen = r
+            if shift is None:
+                for c in df_t.columns:
+                    if ('vac' in str(c).lower()) or ('shift' in str(c).lower()):
+                        shift = row.get(c)
                         break
-            loads[cap_key] = loads.get(cap_key, 0) + 1
-            return chosen
+            shift = '' if pd.isna(shift) else str(shift).strip()
+            prio = _task_priority(quals)
+            tasks.append({'idx': idx, 'quals': quals, 'shift': shift, 'prio': prio})
 
-        assigned.append(pick_with_set(req_set, dstr, vcode))
-    df_sorted[out_col] = assigned
+        # Sort by priority then input order
+        tasks.sort(key=lambda x: (x['prio'], x['idx']))
 
-    # Backup old output
+        # Per-day counters
+        assigned_counts: Counter = Counter()
+        rr_pointers: Dict[Tuple[Tuple[str, ...], str], int] = defaultdict(int)
+        assigned_local: Dict[int, str] = {}
+
+        progress = True
+        passes = 0
+        max_passes = 10
+        while progress and passes < max_passes:
+            progress = False
+            passes += 1
+            for t in tasks:
+                if t['idx'] in assigned_local:
+                    continue
+                quals = t['quals']
+                shift = t['shift']
+
+                # Choose one target qualif according to priorities
+                if quals and priorites:
+                    ranked = sorted([(priorites.get(q, 999), q) for q in quals])
+                    target_code = ranked[0][1]
+                    need = [target_code]
+                else:
+                    need = quals or []
+
+                # Build candidate resources
+                possible_resources: List[str] = []
+                for q in need:
+                    emps = comp_to_emps.get(q, [])
+                    for e in emps:
+                        if shift and shift in shift_to_resources:
+                            if e in shift_to_resources[shift]:
+                                possible_resources.append(e)
+                        else:
+                            # any shift where present
+                            for lst in shift_to_resources.values():
+                                if e in lst:
+                                    possible_resources.append(e)
+
+                # Unique and respect per-resource/day cap
+                seen = set()
+                candidates: List[str] = []
+                for r in possible_resources:
+                    if r not in seen:
+                        seen.add(r)
+                        candidates.append(r)
+                candidates = [c for c in candidates if assigned_counts[c] < max_assign_per_resource_per_day]
+
+                if not candidates:
+                    continue
+
+                key_rr = (tuple(need), shift)
+                ptr = rr_pointers[key_rr] % len(candidates)
+                chosen = candidates[ptr]
+                rr_pointers[key_rr] = (rr_pointers[key_rr] + 1) % (len(candidates) or 1)
+
+                assigned_local[t['idx']] = chosen
+                assigned_counts[chosen] += 1
+                progress = True
+
+        # Write local assignments
+        for idx, res in assigned_local.items():
+            orig = norm_to_orig.get(res, res)
+            df_out.at[idx, 'Ressource_affectee'] = orig
+        total_assigned += len(assigned_local)
+
+    # Backup and write
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_name = BACKUP_FMT.format(ts=ts)
     try:
-        if os.path.exists(OUTPUT_PATH):
-            ts = time.strftime("%Y%m%d_%H%M%S")
-            backup_path = BACKUP_FMT.format(ts=ts)
-            try:
-                os.replace(OUTPUT_PATH, backup_path)
-            except Exception:
-                # Fallback to copy
-                df_old = _load_csv(OUTPUT_PATH)
-                df_old.to_csv(backup_path, index=False, encoding=ENCODING, sep=SEP)
+        pd.read_csv(TACHES_PATH, encoding=ENCODING, sep=SEP).to_csv(backup_name, index=False, sep=SEP, encoding=ENCODING)
     except Exception:
         pass
-
-    # Write new output
-    df_sorted.to_csv(OUTPUT_PATH, index=False, encoding=ENCODING, sep=SEP)
+    df_out.to_csv(OUTPUT_PATH, index=False, sep=SEP, encoding=ENCODING)
     return OUTPUT_PATH
 
 
-if __name__ == "__main__":
-    path = assign_tasks()
-    print(f"Assignment written to: {path}")
+if __name__ == '__main__':
+    import argparse
+    p = argparse.ArgumentParser()
+    p.add_argument('--start', help='start date dd/mm/YYYY or YYYY-mm-dd', default=None)
+    p.add_argument('--end', help='end date dd/mm/YYYY or YYYY-mm-dd', default=None)
+    p.add_argument('--max', help='max assignments per resource per day', type=int, default=MAX_ASSIGN_PER_RESOURCE_PER_DAY)
+    args = p.parse_args()
+    print(assign_tasks(max_assign_per_resource_per_day=args.max, start_date=args.start, end_date=args.end))
+
