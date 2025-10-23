@@ -24,11 +24,11 @@ async function refreshHealth() {
   try {
     const data = await getJSON('/health');
     const ok = data.status === 'ok' && String(data.db || '').startsWith('ok');
-    pill.textContent = ok ? 'SantÃ©: OK' : `SantÃ©: ${data.db}`;
+    pill.textContent = ok ? 'Santé: OK' : `Santé: ${data.db}`;
     pill.classList.toggle('ok', ok);
     pill.classList.toggle('bad', !ok);
   } catch (e) {
-    pill.textContent = `SantÃ©: erreur`;
+    pill.textContent = `Santé: erreur`;
     pill.classList.remove('ok');
     pill.classList.add('bad');
   }
@@ -40,8 +40,8 @@ async function refreshOverview() {
   if (!nameEl || !cont) return;
   try {
     const data = await getJSON('/db/tables');
-    const db = (data.db && data.db.db) || '(non dÃ©fini)';
-    nameEl.textContent = db || '(non dÃ©fini)';
+    const db = (data.db && data.db.db) || '(non défini)';
+    nameEl.textContent = db || '(non défini)';
     const tables = data.tables || {};
     cont.innerHTML = '';
     Object.keys(tables).sort().forEach((t) => {
@@ -84,7 +84,7 @@ async function loadAllowedDepartments() {
     const pickSel = document.getElementById('db-list');
     const pickBtn = document.getElementById('btn-pick-db');
     const nsBadge = document.getElementById('ns-badge');
-    if (nsBadge) nsBadge.textContent = ns || '(par dÃ©faut)';
+    if (nsBadge) nsBadge.textContent = ns || '(par défaut)';
     const fillDeptSelects = (depts) => {
       const srcSel = document.getElementById('srcname-select');
       const dstSel = document.getElementById('dstname-select');
@@ -116,7 +116,7 @@ async function loadAllowedDepartments() {
           opt.value = d; opt.textContent = d; selectDept.appendChild(opt);
         });
       }
-      if (inputDb) { inputDb.disabled = true; inputDb.placeholder = `verrouillÃ© (namespace ${ns})`; }
+      if (inputDb) { inputDb.disabled = true; inputDb.placeholder = `verrouillé (namespace ${ns})`; }
       if (pickSel) {
         pickSel.innerHTML = '';
         allowed.forEach((d) => {
@@ -154,7 +154,7 @@ async function onLoadCSVs() {
       const url = prefix ? `/load-csvs?prefix=${encodeURIComponent(prefix)}` : '/load-csvs';
       const res = await getJSON(url, { method: 'POST' });
       setOutput(res);
-      showToast('CSV chargÃ©s avec succÃ¨s', 'success');
+      showToast('CSV chargés avec succÃ¨s', 'success');
       await refreshOverview();
     } catch (e) {
       showToast(`Erreur chargement: ${String(e)}`, 'error');
@@ -167,15 +167,15 @@ async function onCreateDB() {
   const name = document.getElementById('dbname').value.trim();
   if (!name) { setOutput({ error: 'Veuillez saisir un nom de base' }); return; }
   const btn = document.getElementById('btn-create-db');
-  await withBusy(btn, 'CrÃ©ationâ€¦', async () => {
-    setOutput('CrÃ©ation de la base et des tablesâ€¦');
+  await withBusy(btn, 'Créationâ€¦', async () => {
+    setOutput('Création de la base et des tablesâ€¦');
     try {
       const res = await getJSON(`/db/create-and-init?name=${encodeURIComponent(name)}`);
       showToast(`Base ${name} prÃªte`, 'success');
       setOutput(res);
       await refreshOverview();
     } catch (e) {
-      showToast(`Erreur crÃ©ation base: ${String(e)}`, 'error');
+      showToast(`Erreur création base: ${String(e)}`, 'error');
       setOutput({ error: String(e) });
     }
   });
@@ -189,7 +189,7 @@ async function onSwitchDB() {
     setOutput('Basculement sur la base en coursâ€¦');
     try {
       const res = await getJSON(`/db/switch?name=${encodeURIComponent(name)}`);
-      showToast(`ConnectÃ© Ã  ${name}`, 'success');
+      showToast(`Connecté Ã  ${name}`, 'success');
       setOutput(res);
       await refreshOverview();
     } catch (e) {
@@ -201,15 +201,15 @@ async function onSwitchDB() {
 
 async function onInitDB() {
   const btn = document.getElementById('btn-init');
-  await withBusy(btn, 'CrÃ©ationâ€¦', async () => {
-    setOutput('CrÃ©ation des tables (models)â€¦');
+  await withBusy(btn, 'Créationâ€¦', async () => {
+    setOutput('Création des tables (models)â€¦');
     try {
       const res = await getJSON('/init-db', { method: 'POST' });
-      showToast('Tables modÃ¨les crÃ©Ã©es', 'success');
+      showToast('Tables modÃ¨les créées', 'success');
       setOutput(res);
       await refreshOverview();
     } catch (e) {
-      showToast(`Erreur crÃ©ation tables: ${String(e)}`, 'error');
+      showToast(`Erreur création tables: ${String(e)}`, 'error');
       setOutput({ error: String(e) });
     }
   });
@@ -232,7 +232,7 @@ async function onAssign() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      showToast('Affectation terminÃ©e', 'success');
+      showToast('Affectation terminée', 'success');
       setOutput(res);
     } catch (e) {
       showToast(`Erreur affectation: ${String(e)}`, 'error');
@@ -272,13 +272,13 @@ window.addEventListener('DOMContentLoaded', () => {
   if (dropBtn) dropBtn.addEventListener('click', async () => {
     const sel = document.getElementById('db-list');
     const name = sel && sel.value;
-    if (!name) { showToast('SÃ©lectionnez une base', 'error'); return; }
-    if (!window.confirm(`Voulez-vous vraiment supprimer la base â€œ${name}â€ ?\nCette action est irrÃ©versible.`)) return;
+    if (!name) { showToast('Sélectionnez une base', 'error'); return; }
+    if (!window.confirm(`Voulez-vous vraiment supprimer la base â€œ${name}â€ ?\nCette action est irréversible.`)) return;
     await withBusy(dropBtn, 'Suppressionâ€¦', async () => {
       try {
         const res = await getJSON(`/db/drop?name=${encodeURIComponent(name)}`, { method: 'POST' });
         setOutput(res);
-        showToast(`Base supprimÃ©e: ${res.dropped}`, 'success');
+        showToast(`Base supprimée: ${res.dropped}`, 'success');
         await loadDbList();
         await refreshOverview();
       } catch (e) {
@@ -296,7 +296,7 @@ window.addEventListener('DOMContentLoaded', () => {
       try {
         const res = await getJSON(`/db/copy-schema?source=${encodeURIComponent(src)}&target=${encodeURIComponent(dst)}`);
         setOutput(res);
-        showToast(`SchÃ©ma copiÃ© de ${src} vers ${dst}`, 'success');
+        showToast(`Schéma copié de ${src} vers ${dst}`, 'success');
       } catch (e) {
         setOutput({ error: String(e) });
         showToast(`Erreur duplication: ${String(e)}`, 'error');
@@ -308,12 +308,12 @@ window.addEventListener('DOMContentLoaded', () => {
   const btnSimpleLoad = document.getElementById('btn-simple-load');
   if (btnSimpleLoad) btnSimpleLoad.addEventListener('click', async () => {
     const dept = (document.getElementById('dept-select')?.value || document.getElementById('dept')?.value || '').trim();
-    if (!dept) { showToast('Saisissez un nom de dÃ©partement', 'error'); return; }
+    if (!dept) { showToast('Saisissez un nom de département', 'error'); return; }
     await withBusy(btnSimpleLoad, 'Chargementâ€¦', async () => {
       try {
         const res = await getJSON(`/simple/load?dept=${encodeURIComponent(dept)}`, { method: 'POST' });
         setOutput(res);
-        showToast(`CSV chargÃ©s pour ${res.db}`, 'success');
+        showToast(`CSV chargés pour ${res.db}`, 'success');
         await refreshOverview();
       } catch (e) {
         setOutput({ error: String(e) });
@@ -334,8 +334,8 @@ window.addEventListener('DOMContentLoaded', () => {
           res = await getJSON('/assign', { method: 'POST' });
         }
         setOutput(res);
-        showToast('Affectation terminÃ©e â€“ tÃ©lÃ©chargementâ€¦', 'success');
-        // DÃ©clenche le tÃ©lÃ©chargement du fichier gÃ©nÃ©rÃ©
+        showToast('Affectation terminée â€“ téléchargementâ€¦', 'success');
+        // Déclenche le téléchargement du fichier généré
         if (FILE_ONLY && dept) {
           // prefer department output file path
           window.location.href = `/download?dept=${encodeURIComponent(dept)}`;

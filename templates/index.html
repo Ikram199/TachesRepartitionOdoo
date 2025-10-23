@@ -3,35 +3,35 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>App Web - RÃ©partition</title>
+    <title>App Web - Répartition</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <header>
-      <h1>Console de rÃ©partition</h1>
+      <h1>Console de répartition</h1>
       <nav>
         <a href="/" class="active">Accueil</a>
         <a href="/databases">Bases</a>
-        <a href="/departments">DÃ©partements</a>
+        <a href="/departments">Départements</a>
         {% if not file_only %}<a href="/tables">Tables</a>{% endif %}
       </nav>
-      <div id="health" class="pill">VÃ©rification.</div>
+      <div id="health" class="pill">Vérification.</div>
     </header>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <main>
       <section>
-        <h2>DÃ©marrer</h2>
-        <p>Choisissez une base OU gÃ©rez par dÃ©partement (recommandÃ© en hÃ©bergement mutualisÃ©).</p>
+        <h2>Démarrer</h2>
+        <p>Choisissez une base OU gérez par département (recommandé en hébergement mutualisé).</p>
         <div class="actions">
           <a class="btn" href="/databases">Aller aux bases</a>
-          <a class="btn" href="/departments">GÃ©rer par dÃ©partement</a>
+          <a class="btn" href="/departments">Gérer par département</a>
         </div>
       </section>
     </main>
 
     <footer>
-      <small>App Web - RÃ©partition CSV{% if not file_only %} Â· MySQL{% endif %} & Affectation</small>
+      <small>App Web - Répartition CSV{% if not file_only %} Â· MySQL{% endif %} & Affectation</small>
     </footer>
 
     <script>window.FILE_ONLY = {{ 'true' if file_only else 'false' }};</script>

@@ -20,7 +20,7 @@ CSV_FILES = [
     "pointage.csv",
     "priorite.csv",
     "tacheslignes.csv",
-    "TachesSÃ©parÃ©.csv",
+    "TachesSéparé.csv",
 ]
 
 # Logical names for UI and per-department management
@@ -29,7 +29,7 @@ CSV_LOGICAL = [
     ("pointage", "pointage.csv"),
     ("priorite", "priorite.csv"),
     ("tacheslignes", "tacheslignes.csv"),
-    ("tachessepare", "TachesSÃ©parÃ©.csv"),
+    ("tachessepare", "TachesSéparé.csv"),
 ]
 
 
@@ -499,13 +499,13 @@ def fill_ressource_by_ligne(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def fill_tachessepare_from_assign(df_ts: pd.DataFrame, df_assign: pd.DataFrame) -> pd.DataFrame:
-    """Fill Ressource in TachesSÃ©parÃ© from TachesLignes_assignÃ© by matching line numbers.
+    """Fill Ressource in TachesSéparé from TachesLignes_assigné by matching line numbers.
 
     - Detect line-number columns:
-        * TachesSÃ©parÃ©: contains 'ligne' and 'planche'
-        * TachesLignes_assignÃ©: contains 'ligne' and not 'planche' or exact 'Ligne de planche'
+        * TachesSéparé: contains 'ligne' and 'planche'
+        * TachesLignes_assigné: contains 'ligne' and not 'planche' or exact 'Ligne de planche'
     - Detect resource columns:
-        * TachesSÃ©parÃ©: column containing 'ressource'
+        * TachesSéparé: column containing 'ressource'
         * Assign: column containing 'ressource_affect'
     - Left join by line number (cast to string trimmed), fill missing resources in TS with assigned ones.
     """

@@ -311,7 +311,7 @@ def db_fill_tachessepare(db: str):
 
 @app.get("/databases/<db>/download/assign")
 def db_download_assign(db: str):
-    """Télécharger le fichier d'assignation gÃ©nÃ©rÃ© pour cette base."""
+    """Télécharger le fichier d'assignation généré pour cette base."""
     folder = _db_folder(db)
     # Try common assignment filenames within the DB folder
     candidates = [
