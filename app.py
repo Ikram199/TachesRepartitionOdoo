@@ -40,13 +40,12 @@ app.secret_key = (
 )
 # Ensure JSON responses keep accents (UTF-8) instead of ASCII escaping
 app.config['JSON_AS_ASCII'] = False
-
 # -------------------- Auth --------------------
 def _allowed_path(path: str) -> bool:
     # Public endpoints
     if path.startswith('/static'):
         return True
-    if path in {'/login', '/health', '/'}:
+    if path in {'/login', '/health'}:
         return True
     return False
 
@@ -57,7 +56,7 @@ def require_login():
     if not session.get('auth'):
         return redirect(url_for('login', next=request.path))
 
-@app.get('/login')
+@app.get('/')
 def login():
     return render_template('login.html')
 
@@ -115,9 +114,9 @@ def health():
 
 @app.get("/")
 def index():
+    if not session.get("auth"): 
+        return redirect(url_for("login"))
     return render_template("index.html", file_only=file_only_mode())
-
-
 # -------------------- New DB-first flow --------------------
 
 def _db_folder(dbname: str) -> str:
@@ -817,8 +816,8 @@ def department_assign(dept: str):
         assign_module.TACHES_PATH = taches
         assign_module.POINTAGE_PATH = pointage
         assign_module.COMPETENCE_PATH = competence
-        assign_module.PRIORITE_PATH = priorite\n        assign_module.OUTPUT_PATH = output
-        assign_module.BACKUP_FMT = os.path.join(dept_dir, backup_fmt)
+        assign_module.PRIORITE_PATH = priorite
+        assign_module.OUTPUT_PATH = output
         # Parse optional params
         if request.method == 'GET':
             start = request.args.get('start'); end = request.args.get('end'); max_per = request.args.get('max')
@@ -1057,9 +1056,11 @@ def department_prepare(dept: str):
 
 
 if __name__ == "__main__":
-    host = os.environ.get("FLASK_HOST", "127.0.0.1")
-    port = int(os.environ.get("FLASK_PORT", "5050"))
+    # Bind to 0.0.0.0 and PORT for PaaS (Railway/Heroku)
+    host = os.environ.get("HOST") or os.environ.get("FLASK_HOST") or "0.0.0.0"
+    port = int(os.environ.get("PORT") or os.environ.get("FLASK_PORT") or 8080)
     app.run(host=host, port=port)
+
 
 
 
