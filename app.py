@@ -29,6 +29,8 @@ except Exception as e:
 else:
     ASSIGN_IMPORT_ERROR = None
 
+from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, flash, session
+
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 # Configure secret key for sessions/flash; read from env or use a dev default
