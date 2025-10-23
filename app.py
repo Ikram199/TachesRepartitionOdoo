@@ -56,7 +56,7 @@ def require_login():
     if not session.get('auth'):
         return redirect(url_for('login', next=request.path))
 
-@app.get('/')
+@app.get('/login')
 def login():
     return render_template('login.html')
 
