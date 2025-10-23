@@ -220,6 +220,10 @@ def db_assign(db: str):
         assign_module.POINTAGE_PATH = paths['pointage']
         assign_module.COMPETENCE_PATH = paths['competence']
         assign_module.PRIORITE_PATH = paths['priorite']
+        # Optional program file
+        prog_path = os.path.join(folder, 'prog.csv')
+        if os.path.exists(prog_path):
+            assign_module.PROG_PATH = prog_path
         # Force a stable ASCII filename to avoid OS/encoding surprises
         assign_module.OUTPUT_PATH = os.path.join(folder, 'TachesLignes_assigne.csv')
         assign_module.BACKUP_FMT = os.path.join(folder, 'TachesLignes_backup_{ts}.csv')
@@ -778,6 +782,9 @@ def department_assign(dept: str):
         assign_module.POINTAGE_PATH = pointage
         assign_module.COMPETENCE_PATH = competence
         assign_module.PRIORITE_PATH = priorite
+        prog_path = os.path.join(dept_dir, 'prog.csv')
+        if os.path.exists(prog_path):
+            assign_module.PROG_PATH = prog_path
         assign_module.OUTPUT_PATH = output
         assign_module.BACKUP_FMT = os.path.join(dept_dir, backup_fmt)
         # Parse optional params
