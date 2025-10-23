@@ -1,6 +1,5 @@
 ﻿import os
-import json
-from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, flash, session
+import json
 from dotenv import load_dotenv
 
 from db import (
@@ -362,7 +361,7 @@ def db_csv_template(db: str):
         rows = 5
     if not logical or logical not in dict(CSV_LOGICAL):
         return jsonify({"ok": False, "error": "Type invalide"}), 400
-    # Try to infer headers from existing CSV in the DB folder, otherwise return only an informational first line
+    # Try to infer headers from existing CSV in the DB folder, otherwise provide ASCII defaults
     import io, csv
     folder = _db_folder(db)
     path = os.path.join(folder, f"{logical}.csv")
@@ -378,13 +377,39 @@ def db_csv_template(db: str):
                 for _ in range(max(0, rows)):
                     w.writerow([''] * len(headers))
             else:
-                w.writerow([f"No headers available for {logical}"])
+                defaults = {
+                    'tacheslignes': ['Jour', 'JS', 'Ligne de planche', 'Qualif 1', 'Qualif 2', 'Qualif 3', 'Vacation', 'Nom Prenom'],
+                    'competence': ['Nom Prenom', 'Qualif 1', 'Qualif 2', 'Qualif 3'],
+                    'priorite': ['nom_cies', 'nb_ressource', 'priorite'],
+                    'pointage': ['Date', 'Ressource', 'Nom Shift'],
+                    'tachessepare': ['Ligne de planche', 'Ressource'],
+                }
+                h = defaults.get(logical, [])
+                if h:
+                    w.writerow(h)
+                    for _ in range(max(0, rows)):
+                        w.writerow([''] * len(h))
+                else:
+                    w.writerow([f"No headers available for {logical}"])
         else:
-            w.writerow([f"No headers available for {logical}"])
+            defaults = {
+                'tacheslignes': ['Jour', 'JS', 'Ligne de planche', 'Qualif 1', 'Qualif 2', 'Qualif 3', 'Vacation', 'Nom Prenom'],
+                'competence': ['Nom Prenom', 'Qualif 1', 'Qualif 2', 'Qualif 3'],
+                'priorite': ['nom_cies', 'nb_ressource', 'priorite'],
+                'pointage': ['Date', 'Ressource', 'Nom Shift'],
+                'tachessepare': ['Ligne de planche', 'Ressource'],
+            }
+            h = defaults.get(logical, [])
+            if h:
+                w.writerow(h)
+                for _ in range(max(0, rows)):
+                    w.writerow([''] * len(h))
+            else:
+                w.writerow([f"No headers available for {logical}"])
     except Exception:
+        # Last resort fallback
         w.writerow([f"No headers available for {logical}"])
-    data = buf.getvalue().encode('windows-1252', errors='ignore')
-    from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, flash, session
+    data = buf.getvalue().encode('windows-1252', errors='ignore')
     return _send(io.BytesIO(data), mimetype='text/csv; charset=windows-1252', as_attachment=True, download_name=f"{logical}_modele.csv")
 
 
@@ -863,6 +888,16 @@ def department_csv_template(dept: str):
         return jsonify({"ok": False, "error": "Type invalide"}), 400
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
     headers = get_headers_for_logical(dept, logical, base_dir=base_dir)
+    # Fallback headers for each logical type when no file exists yet
+    if not headers:
+        defaults = {
+            'tacheslignes': ['Jour', 'JS', 'Ligne de planche', 'Qualif 1', 'Qualif 2', 'Qualif 3', 'Vacation', 'Nom Prenom'],
+            'competence': ['Nom Prenom', 'Qualif 1', 'Qualif 2', 'Qualif 3'],
+            'priorite': ['nom_cies', 'nb_ressource', 'priorite'],
+            'pointage': ['Date', 'Ressource', 'Nom Shift'],
+            'tachessepare': ['Ligne de planche', 'Ressource'],
+        }
+        headers = defaults.get(logical, [])
     # Build CSV content
     import io, csv
     buf = io.StringIO()
@@ -874,8 +909,7 @@ def department_csv_template(dept: str):
     else:
         # no headers known; write just a comment-like first line
         w.writerow([f"No headers available for {logical}"])
-    data = buf.getvalue().encode('windows-1252', errors='ignore')
-    from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, flash, session
+    data = buf.getvalue().encode('windows-1252', errors='ignore')
     return send_file(io.BytesIO(data), mimetype='text/csv; charset=windows-1252', as_attachment=True, download_name=f"{logical}_modele.csv")
 
 
@@ -920,8 +954,7 @@ def department_csv_fill_download(dept: str):
             df2 = fill_ressource_by_ligne(df)
         buf = io.StringIO()
         df2.to_csv(buf, index=False, sep=';', encoding='windows-1252')
-        data = buf.getvalue().encode('windows-1252', errors='ignore')
-        from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, flash, session
+        data = buf.getvalue().encode('windows-1252', errors='ignore')
         suffix = 'filled_assign' if source == 'assign' else 'filled'
         return send_file(io.BytesIO(data), mimetype='text/csv; charset=windows-1252', as_attachment=True, download_name=f"{logical}_{suffix}.csv")
     except Exception as e:
