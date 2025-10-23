@@ -26,6 +26,7 @@
       {% endwith %}
       <section>
         <h2>Fichiers du département</h2>
+      </br>
         <table class="grid">
           <thead>
             <tr><th>Type</th><th>Fichier actuel</th><th>Uploader</th><th>Modèle</th></tr>
@@ -54,9 +55,7 @@
           </tbody>
         </table>
         {% if not file_only %}
-        <form method="POST" action="/departments/{{ dept }}/csv/load" style="margin-top:12px;">
-          <button type="submit">Charger ces CSV dans la base du département</button>
-        </form>
+       
         {% endif %}
       </section>
       <section>
