@@ -308,27 +308,44 @@ def assign_tasks(max_assign_per_resource_per_day: int = MAX_ASSIGN_PER_RESOURCE_
                 quals = t['quals']
                 shift = t['shift']
 
-                # Choose one target qualif according to priorities
-                if quals and priorites:
-                    ranked = sorted([(priorites.get(q, 999), q) for q in quals])
-                    target_code = ranked[0][1]
-                    need = [target_code]
+                # Determine required qualifications
+                uniq_quals = [q for q in dict.fromkeys(quals)]
+                need_all = set(uniq_quals)
+                require_all = len(need_all) >= 2  # AND logic when multiple qualifs present
+                if not require_all:
+                    if uniq_quals and priorites:
+                        ranked = sorted([(priorites.get(q, 999), q) for q in uniq_quals])
+                        target_code = ranked[0][1]
+                        need = [target_code]
+                    else:
+                        need = uniq_quals
                 else:
-                    need = quals or []
+                    need = uniq_quals
 
                 # Build candidate resources
                 possible_resources: List[str] = []
-                for q in need:
-                    emps = comp_to_emps.get(q, [])
-                    for e in emps:
-                        if shift and shift in shift_to_resources:
-                            if e in shift_to_resources[shift]:
-                                possible_resources.append(e)
-                        else:
-                            # any shift where present
-                            for lst in shift_to_resources.values():
-                                if e in lst:
+                if require_all:
+                    # Resource must have ALL required qualifs
+                    for e, comps in emp_to_comps.items():
+                        if need_all.issubset(comps):
+                            if shift and shift in shift_to_resources:
+                                if e in shift_to_resources[shift]:
                                     possible_resources.append(e)
+                            else:
+                                if any(e in lst for lst in shift_to_resources.values()):
+                                    possible_resources.append(e)
+                else:
+                    # Single-qualif path (or none)
+                    for q in need:
+                        emps = comp_to_emps.get(q, [])
+                        for e in emps:
+                            if shift and shift in shift_to_resources:
+                                if e in shift_to_resources[shift]:
+                                    possible_resources.append(e)
+                            else:
+                                for lst in shift_to_resources.values():
+                                    if e in lst:
+                                        possible_resources.append(e)
 
                 # Unique and respect per-resource/day cap
                 seen = set()
@@ -376,4 +393,3 @@ if __name__ == '__main__':
     p.add_argument('--max', help='max assignments per resource per day', type=int, default=MAX_ASSIGN_PER_RESOURCE_PER_DAY)
     args = p.parse_args()
     print(assign_tasks(max_assign_per_resource_per_day=args.max, start_date=args.start, end_date=args.end))
-
