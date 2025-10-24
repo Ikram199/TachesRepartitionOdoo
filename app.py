@@ -986,17 +986,28 @@ def department_csv_fill_download(dept: str):
         if source == 'assign':
             # Load assignment file from the department upload folder
             dept_dir = os.path.join(uploads_dir_base(), 'departments', dept)
-            names = [os.path.basename(getattr(assign_module, 'OUTPUT_PATH', '') or '') or 'TachesLignes_assigne.csv','TachesLignes_assigne.csv','tacheslignes_assigne.csv','TachesLignes_assign.csv','tacheslignes_assign.csv']; assign_path = None
+            names = [
+                os.path.basename(getattr(assign_module, 'OUTPUT_PATH', '') or '') or 'TachesLignes_assigne.csv',
+                'TachesLignes_assigne.csv',
+                'tacheslignes_assigne.csv',
+                'TachesLignes_assign.csv',
+                'tacheslignes_assign.csv',
+            ]
+            assign_path = None
             tried = []
             for name in names:
-            assign_path = None
-            for name in candidates:
                 p = os.path.join(dept_dir, name)
+                tried.append(p)
                 if os.path.exists(p):
                     assign_path = p
                     break
+            # Fallback to absolute OUTPUT_PATH if available and exists
             if not assign_path:
-                return jsonify({"ok": False, "error": "Fichier d'assignation introuvable", "folder": dept_dir}), 404
+                abs_out = getattr(assign_module, 'OUTPUT_PATH', None)
+                if abs_out and os.path.isabs(abs_out) and os.path.exists(abs_out):
+                    assign_path = abs_out
+            if not assign_path:
+                return jsonify({"ok": False, "error": "Fichier d'assignation introuvable", "folder": dept_dir, "tried": tried}), 404
             df_asg = pd.read_csv(assign_path, encoding='windows-1252', sep=';')
             df2 = fill_tachessepare_from_assign(df, df_asg)
         else:
