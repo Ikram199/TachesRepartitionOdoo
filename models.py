@@ -49,6 +49,9 @@ class Role(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(64), unique=True, nullable=False)
     description = Column(String(255), nullable=True)
+    # Relations
+    user_roles = relationship("UserRole", back_populates="role", cascade="all, delete-orphan")
+    users = relationship("User", secondary="user_roles", back_populates="roles")
 
 
 class User(Base):
@@ -62,12 +65,19 @@ class User(Base):
         server_default=text("CURRENT_TIMESTAMP"),
         nullable=False,
     )
+    # Relations
+    user_roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan")
+    roles = relationship("Role", secondary="user_roles", back_populates="users")
+    department_links = relationship("UserDepartment", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserRole(Base):
     __tablename__ = "user_roles"
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     role_id = Column(Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True)
+    # Relations
+    user = relationship("User", back_populates="user_roles")
+    role = relationship("Role", back_populates="user_roles")
 
 
 class UserDepartment(Base):
@@ -78,6 +88,8 @@ class UserDepartment(Base):
     __table_args__ = (
         UniqueConstraint('user_id', 'department', name='uq_user_dept'),
     )
+    # Relations
+    user = relationship("User", back_populates="department_links")
 
 
 def init_db(engine) -> None:
