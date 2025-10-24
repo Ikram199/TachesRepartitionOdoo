@@ -338,7 +338,7 @@ window.addEventListener('DOMContentLoaded', () => {
         // Déclenche le téléchargement du fichier généré
         if (FILE_ONLY && dept) {
           // prefer department output file path
-          window.location.href = `/download?dept=${encodeURIComponent(dept)}`;
+          window.location.href = `/departments/${encodeURIComponent(dept)}/download/assign`;
         } else {
           window.location.href = '/download';
         }
@@ -390,5 +390,6 @@ function withBusy(btn, labelBusy, fn) {
   const done = () => { btn.disabled = false; btn.textContent = prev; };
   return fn().then((res) => { done(); return res; }).catch((e) => { done(); throw e; });
 }
+
 
 

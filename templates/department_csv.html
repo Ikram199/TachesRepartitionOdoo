@@ -69,7 +69,7 @@
           <button type="submit" style="margin-left:12px;">Lancer l'affectation</button>
         </form>
         <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-          <a class="btn" href="/download?dept={{ dept }}">Télécharger l'assignation</a>
+          <a class="btn" href="/departments/{{ dept }}/download/assign">Télécharger l'assignation</a>
           <a class="btn" href="/departments/{{ dept }}/csv/fill-download?type=tachessepare&source=assign">Remplir tachessepare depuis l'assignation</a>
         </div>
         {% endif %}
@@ -83,4 +83,5 @@
     </main>
   </body>
   </html>
+
 

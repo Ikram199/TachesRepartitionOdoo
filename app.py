@@ -336,6 +336,32 @@ def db_download_assign(db: str):
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.get("/departments/<dept>/download/assign")
+def dept_download_assign(dept: str):
+    """Télécharger le fichier d'assignation généré pour ce département."""
+    if not is_allowed_department(dept):
+        return jsonify({"ok": False, "error": "Département non autorisé"}), 403
+    folder = os.path.join(uploads_dir_base(), 'departments', dept)
+    try:
+        names = [
+            os.path.basename(getattr(assign_module, 'OUTPUT_PATH', '') or '') or 'TachesLignes_assigne.csv',
+            'TachesLignes_assigne.csv',
+            'tacheslignes_assigne.csv',
+            'TachesLignes_assign.csv',
+            'tacheslignes_assign.csv',
+        ]
+        tried = []
+        for n in names:
+            if not n:
+                continue
+            p = os.path.join(folder, n)
+            tried.append(p)
+            if os.path.exists(p) and os.path.isfile(p):
+                return send_file(p, mimetype='text/csv; charset=windows-1252', as_attachment=True, download_name=os.path.basename(p))
+        return jsonify({"ok": False, "error": "Fichier non trouve", "folder": folder, "tried": tried}), 404
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 @app.get("/databases/<db>/download/<logical>")
 def db_download_logical(db: str, logical: str):
     """Télécharger un CSV logique depuis le dossier de la base."""
