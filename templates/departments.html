@@ -11,14 +11,12 @@
       <h1>Départements</h1>
       <nav>
         <a href="/">Accueil</a>
-        <a href="/tables">Tables</a>
-        <a href="/upload">Upload</a>
         <a href="/departments" class="active">Départements</a>
       </nav>
     </header>
     <main>
       <section>
-        <h2>Liste (namespace: {{ namespace }})</h2>
+        <h2>Liste des departments</h2>
         {% if departments and departments|length %}
         <ul>
           {% for d in departments %}
@@ -31,10 +29,7 @@
         <p>Aucun département listé. Configurez ALLOWED_DEPARTMENTS dans .env, ou ouvrez un département ci-dessous.</p>
         {% endif %}
         <form method="GET" action="/departments/open" class="db-form" style="margin-top:12px;">
-          <div class="row">
-            <label for="dept">Ouvrir un département</label>
-            <input type="text" name="dept" id="dept" placeholder="ex: demo" />
-          </div>
+       
           <div class="actions">
             <button type="submit">Ouvrir</button>
           </div>
