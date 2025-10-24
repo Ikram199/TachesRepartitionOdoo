@@ -241,7 +241,17 @@ async function onAssign() {
   });
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+  window.addEventListener('DOMContentLoaded', () => {
+    try {
+      const nav = document.querySelector('header nav');
+      if (nav && !nav.querySelector('a[href="/logout"]')) {
+        const a = document.createElement('a');
+        a.href = '/logout';
+        a.textContent = 'Déconnexion';
+        a.style.marginLeft = '16px';
+        nav.appendChild(a);
+      }
+    } catch (_) {}
   const FILE_ONLY = (window.FILE_ONLY === true || window.FILE_ONLY === 'true');
   const elLoad = document.getElementById('btn-load'); if (elLoad) elLoad.addEventListener('click', onLoadCSVs);
   const elInit = document.getElementById('btn-init'); if (elInit) elInit.addEventListener('click', onInitDB);
