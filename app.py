@@ -364,6 +364,32 @@ def dept_download_assign(dept: str):
             tried.append(abs_out)
             if os.path.exists(abs_out) and os.path.isfile(abs_out):
                 return send_file(abs_out, mimetype='text/csv; charset=windows-1252', as_attachment=True, download_name=os.path.basename(abs_out))
+        # Optional: on-demand regeneration if requested
+        if (request.args.get('regen') == '1'):
+            # Verify required inputs exist in the department folder
+            required = {
+                'tacheslignes': os.path.join(folder, 'tacheslignes.csv'),
+                'pointage': os.path.join(folder, 'pointage.csv'),
+                'competence': os.path.join(folder, 'competence.csv'),
+                'priorite': os.path.join(folder, 'priorite.csv'),
+            }
+            missing = [k for k, p in required.items() if not os.path.exists(p)]
+            if missing:
+                return jsonify({"ok": False, "error": "Fichiers manquants pour regeneration", "missing": missing, "folder": folder, "tried": tried}), 400
+            # Override assign module IO paths and regenerate
+            assign_module.TACHES_PATH = required['tacheslignes']
+            assign_module.POINTAGE_PATH = required['pointage']
+            assign_module.COMPETENCE_PATH = required['competence']
+            assign_module.PRIORITE_PATH = required['priorite']
+            out_name = os.path.basename(getattr(assign_module, 'OUTPUT_PATH', 'TachesLignes_assigne.csv'))
+            assign_module.OUTPUT_PATH = os.path.join(folder, out_name)
+            assign_module.BACKUP_FMT = os.path.join(folder, 'TachesLignes_backup_{ts}.csv')
+            try:
+                assign_module.assign_tasks(max_assign_per_resource_per_day=getattr(assign_module, 'MAX_ASSIGN_PER_RESOURCE_PER_DAY', 1))
+            except Exception as e:
+                return jsonify({"ok": False, "error": str(e), "folder": folder, "tried": tried}), 500
+            if os.path.exists(assign_module.OUTPUT_PATH):
+                return send_file(assign_module.OUTPUT_PATH, mimetype='text/csv; charset=windows-1252', as_attachment=True, download_name=os.path.basename(assign_module.OUTPUT_PATH))
         return jsonify({"ok": False, "error": "Fichier non trouve", "folder": folder, "tried": tried}), 404
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -928,6 +954,74 @@ def department_assign(dept: str):
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.get("/assign/download")
+def assign_download_global():
+    if assign_module is None:
+        return jsonify({"ok": False, "error": f"Cannot import run.py: {ASSIGN_IMPORT_ERROR}"}), 500
+    # Use project root CSVs by default
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+    try:
+        assign_module.TACHES_PATH = os.path.join(base_dir, 'tacheslignes.csv')
+        assign_module.POINTAGE_PATH = os.path.join(base_dir, 'pointage.csv')
+        assign_module.COMPETENCE_PATH = os.path.join(base_dir, 'competence.csv')
+        assign_module.PRIORITE_PATH = os.path.join(base_dir, 'priorite.csv')
+        # Optional params
+        start = request.args.get('start')
+        end = request.args.get('end')
+        max_per = request.args.get('max')
+        if max_per is not None:
+            try:
+                max_per = int(max_per)
+            except Exception:
+                return jsonify({"ok": False, "error": "Invalid max (must be integer)"}), 400
+        else:
+            max_per = getattr(assign_module, 'MAX_ASSIGN_PER_RESOURCE_PER_DAY', 1)
+        data = assign_module.assign_tasks(max_assign_per_resource_per_day=max_per, start_date=start, end_date=end, return_bytes=True)
+        import io as _io
+        return send_file(_io.BytesIO(data), mimetype='text/csv; charset=windows-1252', as_attachment=True, download_name='TachesLignes_assigne.csv')
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.get("/departments/<dept>/assign/download")
+def department_assign_download(dept: str):
+    if not is_allowed_department(dept):
+        return jsonify({"ok": False, "error": "Departement non autorise"}), 403
+    if assign_module is None:
+        return jsonify({"ok": False, "error": f"Cannot import run.py: {ASSIGN_IMPORT_ERROR}"}), 500
+    dept_dir = os.path.join(uploads_dir_base(), 'departments', dept)
+    required = {
+        'tacheslignes': os.path.join(dept_dir, 'tacheslignes.csv'),
+        'pointage': os.path.join(dept_dir, 'pointage.csv'),
+        'competence': os.path.join(dept_dir, 'competence.csv'),
+        'priorite': os.path.join(dept_dir, 'priorite.csv'),
+    }
+    missing = [k for k, p in required.items() if not os.path.exists(p)]
+    if missing:
+        return jsonify({"ok": False, "error": "Fichiers manquants", "missing": missing, "folder": dept_dir}), 400
+    try:
+        assign_module.TACHES_PATH = required['tacheslignes']
+        assign_module.POINTAGE_PATH = required['pointage']
+        assign_module.COMPETENCE_PATH = required['competence']
+        assign_module.PRIORITE_PATH = required['priorite']
+        # Optional params
+        start = request.args.get('start')
+        end = request.args.get('end')
+        max_per = request.args.get('max')
+        if max_per is not None:
+            try:
+                max_per = int(max_per)
+            except Exception:
+                return jsonify({"ok": False, "error": "Invalid max (must be integer)"}), 400
+        else:
+            max_per = getattr(assign_module, 'MAX_ASSIGN_PER_RESOURCE_PER_DAY', 1)
+        data = assign_module.assign_tasks(max_assign_per_resource_per_day=max_per, start_date=start, end_date=end, return_bytes=True)
+        import io as _io
+        return send_file(_io.BytesIO(data), mimetype='text/csv; charset=windows-1252', as_attachment=True, download_name='TachesLignes_assigne.csv')
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.get("/departments/<dept>/csv/template")
 def department_csv_template(dept: str):
     if not is_allowed_department(dept):
@@ -984,31 +1078,31 @@ def department_csv_fill_download(dept: str):
         df = pd.read_csv(path, encoding='windows-1252', sep=';')
         source = request.args.get('source')
         if source == 'assign':
-            # Load assignment file from the department upload folder
+            # Build assignment in-memory for this department (no file written)
             dept_dir = os.path.join(uploads_dir_base(), 'departments', dept)
-            names = [
-                os.path.basename(getattr(assign_module, 'OUTPUT_PATH', '') or '') or 'TachesLignes_assigne.csv',
-                'TachesLignes_assigne.csv',
-                'tacheslignes_assigne.csv',
-                'TachesLignes_assign.csv',
-                'tacheslignes_assign.csv',
-            ]
-            assign_path = None
-            tried = []
-            for name in names:
-                p = os.path.join(dept_dir, name)
-                tried.append(p)
-                if os.path.exists(p):
-                    assign_path = p
-                    break
-            # Fallback to absolute OUTPUT_PATH if available and exists
-            if not assign_path:
-                abs_out = getattr(assign_module, 'OUTPUT_PATH', None)
-                if abs_out and os.path.isabs(abs_out) and os.path.exists(abs_out):
-                    assign_path = abs_out
-            if not assign_path:
-                return jsonify({"ok": False, "error": "Fichier d'assignation introuvable", "folder": dept_dir, "tried": tried}), 404
-            df_asg = pd.read_csv(assign_path, encoding='windows-1252', sep=';')
+            required = {
+                'tacheslignes': os.path.join(dept_dir, 'tacheslignes.csv'),
+                'pointage': os.path.join(dept_dir, 'pointage.csv'),
+                'competence': os.path.join(dept_dir, 'competence.csv'),
+                'priorite': os.path.join(dept_dir, 'priorite.csv'),
+            }
+            missing = [k for k, p in required.items() if not os.path.exists(p)]
+            if missing:
+                return jsonify({"ok": False, "error": "Fichiers manquants pour assignation", "missing": missing, "folder": dept_dir}), 400
+            # Override run.py paths for this call
+            assign_module.TACHES_PATH = required['tacheslignes']
+            assign_module.POINTAGE_PATH = required['pointage']
+            assign_module.COMPETENCE_PATH = required['competence']
+            assign_module.PRIORITE_PATH = required['priorite']
+            max_per = request.args.get('max')
+            try:
+                max_per = int(max_per) if max_per is not None else getattr(assign_module, 'MAX_ASSIGN_PER_RESOURCE_PER_DAY', 1)
+            except Exception:
+                return jsonify({"ok": False, "error": "Invalid max (must be integer)"}), 400
+            start = request.args.get('start')
+            end = request.args.get('end')
+            data_assign = assign_module.assign_tasks(max_assign_per_resource_per_day=max_per, start_date=start, end_date=end, return_bytes=True)
+            df_asg = pd.read_csv(io.StringIO(data_assign.decode('windows-1252')), encoding='windows-1252', sep=';')
             df2 = fill_tachessepare_from_assign(df, df_asg)
         else:
             df2 = fill_ressource_by_ligne(df)
@@ -1170,6 +1264,7 @@ if __name__ == "__main__":
     host = os.environ.get("HOST") or os.environ.get("FLASK_HOST") or "0.0.0.0"
     port = int(os.environ.get("PORT") or os.environ.get("FLASK_PORT") or 8080)
     app.run(host=host, port=port)
+
 
 
 

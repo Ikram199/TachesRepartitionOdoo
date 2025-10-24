@@ -337,10 +337,10 @@ window.addEventListener('DOMContentLoaded', () => {
         showToast('Affectation terminée â€“ téléchargementâ€¦', 'success');
         // Déclenche le téléchargement du fichier généré
         if (FILE_ONLY && dept) {
-          // prefer department output file path
-          window.location.href = `/departments/${encodeURIComponent(dept)}/download/assign`;
+          // prefer department output file path (in-memory)
+          window.location.href = `/departments/${encodeURIComponent(dept)}/assign/download`;
         } else {
-          window.location.href = '/download';
+          window.location.href = '/assign/download';
         }
       } catch (e) {
         setOutput({ error: String(e) });
@@ -390,6 +390,7 @@ function withBusy(btn, labelBusy, fn) {
   const done = () => { btn.disabled = false; btn.textContent = prev; };
   return fn().then((res) => { done(); return res; }).catch((e) => { done(); throw e; });
 }
+
 
 
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 import os
+import io
 from datetime import datetime, timedelta
 from collections import defaultdict, Counter
 from typing import Dict, List, Optional, Tuple
@@ -200,7 +201,8 @@ def build_available_from_pointage(pointage_path: str = POINTAGE_PATH, target_dat
 
 def assign_tasks(max_assign_per_resource_per_day: int = MAX_ASSIGN_PER_RESOURCE_PER_DAY,
                  start_date: Optional[str] = None,
-                 end_date: Optional[str] = None) -> str:
+                 end_date: Optional[str] = None,
+                 return_bytes: bool = False) -> str | bytes:
     # Load tasks
     df_t = pd.read_csv(TACHES_PATH, encoding=ENCODING, sep=SEP)
 
@@ -374,7 +376,13 @@ def assign_tasks(max_assign_per_resource_per_day: int = MAX_ASSIGN_PER_RESOURCE_
             df_out.at[idx, 'Ressource_affectee'] = orig
         total_assigned += len(assigned_local)
 
-    # Backup and write
+    # Emit result
+    if return_bytes:
+        buf = io.StringIO()
+        df_out.to_csv(buf, index=False, sep=SEP, encoding=ENCODING)
+        data = buf.getvalue().encode(ENCODING, errors='ignore')
+        return data
+    # Otherwise backup and write to disk
     ts = datetime.now().strftime('%Y%m%d_%H%M%S')
     backup_name = BACKUP_FMT.format(ts=ts)
     try:
