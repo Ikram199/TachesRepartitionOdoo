@@ -5,8 +5,9 @@ from dotenv import load_dotenv
 from db import (
     get_engine, test_connection, ensure_database_exists, set_current_database,
     get_server_engine, qualify_db_name, is_allowed_db, db_namespace,
-    is_allowed_department, allowed_departments, derive_departments_from_databases
+    is_allowed_department, allowed_departments, derive_departments_from_databases,
 )
+from db import _mysql_params_from_env as _auth_mysql_env, _build_sqlalchemy_url as _auth_build_url
 from models import init_db
 from loader import load_csv_to_mysql, add_parent_to_path
 from loader import sanitize_identifier as _sanitize_id
@@ -93,6 +94,16 @@ def _allowed_path(path: str) -> bool:
         return True
     return False
 
+def _auth_engine():
+    """Engine dédié à l'authentification/administration (toujours sur MYSQL_DB).
+
+    Évite d'utiliser la base 'courante' qui peut être une base départementaire.
+    """
+    from sqlalchemy import create_engine as _create_engine
+    p = _auth_mysql_env()
+    url = _auth_build_url(p["user"], p["password"], p["host"], p["port"], p["db"])
+    return _create_engine(url, pool_pre_ping=True, pool_recycle=1800)
+
 @app.before_request
 def require_login():
     if _allowed_path(request.path):
@@ -113,8 +124,7 @@ def do_login():
     # 1) Try DB-backed auth when DB is enabled
     if not file_only_mode():
         try:
-            ensure_database_exists()
-            engine = get_engine()
+            engine = _auth_engine()
             # Ensure user tables exist
             try:
                 init_db(engine)
@@ -267,8 +277,7 @@ def admin_users_list():
     guard = _admin_required()
     if guard:
         return guard
-    ensure_database_exists()
-    engine = get_engine()
+    engine = _auth_engine()
     try:
         init_db(engine)
     except Exception:
@@ -299,8 +308,7 @@ def admin_user_new_form():
     guard = _admin_required()
     if guard:
         return guard
-    ensure_database_exists()
-    engine = get_engine()
+    engine = _auth_engine()
     try:
         init_db(engine)
     except Exception:
@@ -316,8 +324,7 @@ def admin_user_new_post():
     guard = _admin_required()
     if guard:
         return guard
-    ensure_database_exists()
-    engine = get_engine()
+    engine = _auth_engine()
     try:
         init_db(engine)
     except Exception:
@@ -358,8 +365,7 @@ def admin_user_edit_form(uid: int):
     guard = _admin_required()
     if guard:
         return guard
-    ensure_database_exists()
-    engine = get_engine()
+    engine = _auth_engine()
     try:
         init_db(engine)
     except Exception:
@@ -381,8 +387,7 @@ def admin_user_edit_post(uid: int):
     guard = _admin_required()
     if guard:
         return guard
-    ensure_database_exists()
-    engine = get_engine()
+    engine = _auth_engine()
     try:
         init_db(engine)
     except Exception:
@@ -431,8 +436,7 @@ def admin_user_delete(uid: int):
     if session.get('user_id') == uid:
         flash("Vous ne pouvez pas supprimer votre propre compte", 'error')
         return redirect(url_for('admin_users_list'))
-    ensure_database_exists()
-    engine = get_engine()
+    engine = _auth_engine()
     try:
         init_db(engine)
     except Exception:
