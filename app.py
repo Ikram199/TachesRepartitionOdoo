@@ -358,6 +358,12 @@ def dept_download_assign(dept: str):
             tried.append(p)
             if os.path.exists(p) and os.path.isfile(p):
                 return send_file(p, mimetype='text/csv; charset=windows-1252', as_attachment=True, download_name=os.path.basename(p))
+        # Also try absolute OUTPUT_PATH if set and exists (in case it was overridden elsewhere)
+        abs_out = getattr(assign_module, 'OUTPUT_PATH', None)
+        if abs_out and os.path.isabs(abs_out):
+            tried.append(abs_out)
+            if os.path.exists(abs_out) and os.path.isfile(abs_out):
+                return send_file(abs_out, mimetype='text/csv; charset=windows-1252', as_attachment=True, download_name=os.path.basename(abs_out))
         return jsonify({"ok": False, "error": "Fichier non trouve", "folder": folder, "tried": tried}), 404
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -881,7 +887,7 @@ def department_assign(dept: str):
     pointage = required['pointage']
     competence = required['competence']
     priorite = required['priorite']
-    output = os.path.join(dept_dir, getattr(assign_module, 'OUTPUT_PATH', 'TachesLignes_assignÇ¸.csv'))
+    output = os.path.join(dept_dir, os.path.basename(getattr(assign_module, 'OUTPUT_PATH', 'TachesLignes_assigne.csv')))
     backup_fmt = getattr(assign_module, 'BACKUP_FMT', 'TachesLignes_backup_{ts}.csv')
     # Override module-level paths for this call
     try:
@@ -980,13 +986,9 @@ def department_csv_fill_download(dept: str):
         if source == 'assign':
             # Load assignment file from the department upload folder
             dept_dir = os.path.join(uploads_dir_base(), 'departments', dept)
-            candidates = [
-                'TachesLignes_assigne.csv',
-                'TachesLignes_assigne.csv',
-                'TachesLignes_assign.csv',
-                'TachesLignes_assigne.csv',
-                'TachesLignes_assignÇ¸.csv',
-            ]
+            names = [os.path.basename(getattr(assign_module, 'OUTPUT_PATH', '') or '') or 'TachesLignes_assigne.csv','TachesLignes_assigne.csv','tacheslignes_assigne.csv','TachesLignes_assign.csv','tacheslignes_assign.csv']; assign_path = None
+            tried = []
+            for name in names:
             assign_path = None
             for name in candidates:
                 p = os.path.join(dept_dir, name)
@@ -1157,6 +1159,12 @@ if __name__ == "__main__":
     host = os.environ.get("HOST") or os.environ.get("FLASK_HOST") or "0.0.0.0"
     port = int(os.environ.get("PORT") or os.environ.get("FLASK_PORT") or 8080)
     app.run(host=host, port=port)
+
+
+
+
+
+
 
 
 
