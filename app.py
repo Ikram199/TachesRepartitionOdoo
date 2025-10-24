@@ -41,6 +41,48 @@ app.secret_key = (
 )
 # Ensure JSON responses keep accents (UTF-8) instead of ASCII escaping
 app.config['JSON_AS_ASCII'] = False
+# -------------------- CSV header expectations --------------------
+def _essential_headers() -> dict:
+    """Return a map of logical CSV -> minimal/essential headers expected by the app.
+
+    Names are recommendations for end-users. Internally, we remain flexible and
+    accept variants via heuristics, but this list is used for validation + templates.
+    """
+    return {
+        'tacheslignes': ['Jour', 'Ligne de planche', 'Qualif 1', 'Qualif 2', 'Qualif 3', 'Nom Shift'],
+        'pointage': ['Date', 'Ressource', 'Nom Shift'],
+        'competence': ['Nom Prenom', 'Qualif 1', 'Qualif 2', 'Qualif 3'],
+        'priorite': ['code', 'priorite'],
+        'tachessepare': ['Ligne de planche', 'Ressource'],
+    }
+
+def _validate_headers_for_file(logical: str, path: str) -> dict:
+    """Validate a CSV's headers against essentials. Returns a JSON-serializable report."""
+    import pandas as _pd
+    result = {
+        'logical': logical,
+        'path': path,
+        'ok': False,
+        'found': [],
+        'missing': [],
+        'recommended': _essential_headers().get(logical, []),
+    }
+    try:
+        df = _pd.read_csv(path, encoding='windows-1252', sep=';', nrows=0)
+        cols = [str(c) for c in df.columns]
+        result['found'] = cols
+        expected = result['recommended']
+        # consider a header found if a case-insensitive match exists among columns
+        missing = []
+        for name in expected:
+            low = name.strip().lower()
+            if not any(str(c).strip().lower() == low for c in cols):
+                missing.append(name)
+        result['missing'] = missing
+        result['ok'] = len(missing) == 0
+    except Exception as e:
+        result['error'] = str(e)
+    return result
 # -------------------- Auth --------------------
 def _allowed_path(path: str) -> bool:
     # Public endpoints
@@ -206,6 +248,14 @@ def db_csv_upload(db: str):
     os.makedirs(folder, exist_ok=True)
     save_path = os.path.join(folder, f"{logical}.csv")
     f.save(save_path)  # overwrite
+    # Post-upload header validation (non bloquant)
+    try:
+        _rep = _validate_headers_for_file(logical, save_path)
+        if not _rep.get('ok'):
+            _miss = ", ".join(_rep.get('missing') or [])
+            flash(f"Attention: colonnes manquantes pour {logical}: {_miss}", "error")
+    except Exception:
+        pass
     flash(f"Fichier '{logical}' importé pour {db}", "success")
     return redirect(url_for('ui_db_csv', db=db))
 
@@ -739,6 +789,14 @@ def upload_post():
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, save_name)
     f.save(save_path)
+    # Post-upload header validation (non bloquant)
+    try:
+        _rep = _validate_headers_for_file(logical, save_path)
+        if not _rep.get('ok'):
+            _miss = ", ".join(_rep.get('missing') or [])
+            flash(f"Attention: colonnes manquantes pour {logical}: {_miss}", "error")
+    except Exception:
+        pass
 
     try:
         res = ingest_single_file(
@@ -1037,13 +1095,7 @@ def department_csv_template(dept: str):
     headers = get_headers_for_logical(dept, logical, base_dir=base_dir)
     # Fallback headers for each logical type when no file exists yet
     if not headers:
-        defaults = {
-            'tacheslignes': ['Jour', 'JS', 'Ligne de planche', 'Qualif 1', 'Qualif 2', 'Qualif 3', 'Vacation', 'Nom Prenom'],
-            'competence': ['Nom Prenom', 'Qualif 1', 'Qualif 2', 'Qualif 3'],
-            'priorite': ['nom_cies', 'nb_ressource', 'priorite'],
-            'pointage': ['Date', 'Ressource', 'Nom Shift'],
-            'tachessepare': ['Ligne de planche', 'Ressource'],
-        }
+        defaults = _essential_headers()
         headers = defaults.get(logical, [])
     # Build CSV content
     import io, csv
@@ -1060,7 +1112,39 @@ def department_csv_template(dept: str):
     return send_file(io.BytesIO(data), mimetype='text/csv; charset=windows-1252', as_attachment=True, download_name=f"{logical}_modele.csv")
 
 
-## removed CSV validation endpoints per user request
+@app.get("/departments/<dept>/csv/validate")
+def department_csv_validate(dept: str):
+    if not is_allowed_department(dept):
+        return jsonify({"ok": False, "error": "Departement non autorise"}), 403
+    logical = request.args.get('type')
+    if not logical or logical not in dict(CSV_LOGICAL):
+        return jsonify({"ok": False, "error": "Type invalide"}), 400
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+    paths = resolve_dept_csv_paths(dept, base_dir=base_dir)
+    path = paths.get(logical)
+    if not path or not os.path.exists(path):
+        return jsonify({"ok": False, "error": "Fichier introuvable", "logical": logical, "dept": dept, "recommended": _essential_headers().get(logical, [])}), 404
+    rep = _validate_headers_for_file(logical, path)
+    rep['ok'] = rep.get('ok', False)
+    return jsonify({"ok": rep['ok'], **rep})
+
+
+@app.get("/databases/<db>/csv/validate")
+def db_csv_validate(db: str):
+    logical = request.args.get('type')
+    if not logical or logical not in dict(CSV_LOGICAL):
+        return jsonify({"ok": False, "error": "Type invalide"}), 400
+    path = _resolve_db_csv_paths(db).get(logical)
+    if not path or not os.path.exists(path):
+        return jsonify({"ok": False, "error": "Fichier introuvable", "logical": logical, "db": db, "recommended": _essential_headers().get(logical, [])}), 404
+    rep = _validate_headers_for_file(logical, path)
+    rep['ok'] = rep.get('ok', False)
+    return jsonify({"ok": rep['ok'], **rep})
+
+
+@app.get("/csv/required")
+def csv_required():
+    return jsonify({"ok": True, "required": _essential_headers()})
 
 
 @app.get("/departments/<dept>/csv/fill-download")
