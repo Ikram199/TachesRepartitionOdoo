@@ -125,8 +125,16 @@ def do_login():
                 row = conn.execute(text("SELECT id, username, password_hash, is_active FROM users WHERE username=:u"), {"u": username}).mappings().first()
                 if row and row.get('is_active'):
                     ok = False
+                    ph = row.get('password_hash') or ''
                     try:
-                        ok = check_password_hash(row['password_hash'], pwd)
+                        # Support bcrypt hashes ($2a$/$2b$/$2y$) in addition to Werkzeug's default pbkdf2
+                        if isinstance(ph, str) and ph.startswith(('$2a$', '$2b$', '$2y$')):
+                            import bcrypt as _bcrypt
+                            # Python bcrypt expects $2a$ or $2b$; $2y$ (PHP) is compatible with $2b$
+                            ph_eff = ('$2b$' + ph[4:]) if ph.startswith('$2y$') else ph
+                            ok = _bcrypt.checkpw(pwd.encode('utf-8', 'ignore'), ph_eff.encode('utf-8', 'ignore'))
+                        else:
+                            ok = check_password_hash(ph, pwd)
                     except Exception:
                         ok = False
                     if ok:
