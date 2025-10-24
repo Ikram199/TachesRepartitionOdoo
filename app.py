@@ -485,10 +485,29 @@ def download_assigned():
     candidates = []
     if dept:
         dept_dir = os.path.join(uploads_dir_base(), 'departments', dept)
-        candidates.append(os.path.join(dept_dir, expected_name))
+        # Try robust set of common filenames within the department folder
+        names = [
+            os.path.basename(expected_name) if expected_name else "TachesLignes_assigne.csv",
+            "TachesLignes_assigne.csv",
+            "tacheslignes_assigne.csv",
+            "TachesLignes_assign.csv",
+            "tacheslignes_assign.csv",
+            "TachesLignes_assign�.csv",
+            "TachesLignes_assign��.csv",
+        ]
+        _seen = set()
+        for n in names:
+            if not n:
+                continue
+            k = n.lower()
+            if k in _seen:
+                continue
+            _seen.add(k)
+            candidates.append(os.path.join(dept_dir, n))
     candidates.extend([
         os.path.join(here, expected_name),
         os.path.join(parent, expected_name),
+        expected_name,
     ])
     for p in candidates:
         if os.path.exists(p) and os.path.isfile(p):
