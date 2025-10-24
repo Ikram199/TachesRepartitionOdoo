@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from sqlalchemy import Column, String, TIMESTAMP, text, Text
+from sqlalchemy import Column, String, TIMESTAMP, text, Text, Integer, Boolean, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import relationship
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -40,6 +41,43 @@ class TachesLignes(Base, _RowBase):
 
 class TachesSepare(Base, _RowBase):
     __tablename__ = "tachessepare"
+
+
+# --- Users & Roles with per-department access ---
+class Role(Base):
+    __tablename__ = "roles"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(64), unique=True, nullable=False)
+    description = Column(String(255), nullable=True)
+
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(80), unique=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    is_active = Column(Boolean, nullable=False, server_default=text("1"))
+    created_at = Column(
+        TIMESTAMP,
+        server_default=text("CURRENT_TIMESTAMP"),
+        nullable=False,
+    )
+
+
+class UserRole(Base):
+    __tablename__ = "user_roles"
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    role_id = Column(Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True)
+
+
+class UserDepartment(Base):
+    __tablename__ = "user_departments"
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    department = Column(String(64), primary_key=True)
+    can_write = Column(Boolean, nullable=False, server_default=text("1"))
+    __table_args__ = (
+        UniqueConstraint('user_id', 'department', name='uq_user_dept'),
+    )
 
 
 def init_db(engine) -> None:

@@ -30,6 +30,7 @@ else:
     ASSIGN_IMPORT_ERROR = None
 
 from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, flash, session
+from werkzeug.security import check_password_hash
 
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -105,12 +106,55 @@ def login():
 
 @app.post('/login')
 def do_login():
-    user = request.form.get('username', '').strip()
+    username = request.form.get('username', '').strip()
     pwd = request.form.get('password', '').strip()
     u_cfg = os.environ.get('ADMIN_USER', 'admin')
     p_cfg = os.environ.get('ADMIN_PASSWORD', 'admin')
-    if user == u_cfg and pwd == p_cfg:
-        session['auth'] = user
+    # 1) Try DB-backed auth when DB is enabled
+    if not file_only_mode():
+        try:
+            ensure_database_exists()
+            engine = get_engine()
+            # Ensure user tables exist
+            try:
+                init_db(engine)
+            except Exception:
+                pass
+            from sqlalchemy import text
+            with engine.connect() as conn:
+                row = conn.execute(text("SELECT id, username, password_hash, is_active FROM users WHERE username=:u"), {"u": username}).mappings().first()
+                if row and row.get('is_active'):
+                    ok = False
+                    try:
+                        ok = check_password_hash(row['password_hash'], pwd)
+                    except Exception:
+                        ok = False
+                    if ok:
+                        uid = int(row['id'])
+                        roles = [r['name'] for r in conn.execute(text("""
+                            SELECT r.name FROM roles r
+                            JOIN user_roles ur ON ur.role_id=r.id
+                            WHERE ur.user_id=:uid
+                        """), {"uid": uid}).mappings().all()]
+                        depts = [d['department'] for d in conn.execute(text("SELECT department FROM user_departments WHERE user_id=:uid"), {"uid": uid}).mappings().all()]
+                        session['auth'] = row['username']
+                        session['user_id'] = uid
+                        session['roles'] = roles
+                        session['depts'] = depts
+                        session['is_admin'] = ('admin' in {r.lower() for r in roles})
+                        flash('Connexion réussie', 'success')
+                        nxt = request.args.get('next') or url_for('index')
+                        return redirect(nxt)
+        except Exception:
+            # Fallback to env-based auth below
+            pass
+    # 2) Fallback to env-admin
+    if username == u_cfg and pwd == p_cfg:
+        session['auth'] = username
+        session['is_admin'] = True
+        # No explicit depts set; admin has access to all
+        session['roles'] = ['admin']
+        session['depts'] = []
         flash('Connexion réussie', 'success')
         nxt = request.args.get('next') or url_for('index')
         return redirect(nxt)
@@ -160,6 +204,29 @@ def index():
     if not session.get("auth"): 
         return redirect(url_for("login"))
     return render_template("index.html", file_only=file_only_mode())
+
+# -------------------- User access helpers --------------------
+def _current_user_info() -> dict:
+    return {
+        'id': session.get('user_id'),
+        'username': session.get('auth'),
+        'roles': session.get('roles') or [],
+        'is_admin': bool(session.get('is_admin')),
+        'departments': session.get('depts') or [],
+    }
+
+def _is_user_allowed_department(dept: str) -> bool:
+    # Global allowlist first
+    if not is_allowed_department(dept):
+        return False
+    info = _current_user_info()
+    if info['is_admin']:
+        return True
+    # If user has explicit list, enforce it strictly
+    depts = [str(d).strip().lower() for d in (info['departments'] or [])]
+    if not depts:
+        return False
+    return str(dept).strip().lower() in depts
 # -------------------- New DB-first flow --------------------
 
 def _db_folder(dbname: str) -> str:
@@ -389,7 +456,7 @@ def db_download_assign(db: str):
 @app.get("/departments/<dept>/download/assign")
 def dept_download_assign(dept: str):
     """Télécharger le fichier d'assignation généré pour ce département."""
-    if not is_allowed_department(dept):
+    if not _is_user_allowed_department(dept):
         return jsonify({"ok": False, "error": "Département non autorisé"}), 403
     folder = os.path.join(uploads_dir_base(), 'departments', dept)
     try:
@@ -777,7 +844,7 @@ def upload_post():
     save_name = f.filename
 
     try:
-        if dept and is_allowed_department(dept):
+        if dept and _is_user_allowed_department(dept):
             save_dir = os.path.join(base_uploads, 'departments', dept)
             os.makedirs(save_dir, exist_ok=True)
             valid_types = set(dict(CSV_LOGICAL).keys())
@@ -827,6 +894,8 @@ def simple_load():
         dept = request.args.get("dept") or payload.get("dept")
         if not dept:
             return jsonify({"ok": False, "error": "Paramètre 'dept' requis"}), 400
+        if not _is_user_allowed_department(dept):
+            return jsonify({"ok": False, "error": "Département non autorisé"}), 403
         if single_db_mode():
             qname = os.environ.get("MYSQL_DB") or ""
             engine = get_engine()
@@ -862,6 +931,11 @@ def ui_departments():
     else:
         derived = []
     depts = allowed or derived
+    # Filter by user permissions if not admin
+    info = _current_user_info()
+    if not info['is_admin']:
+        allowed_user = set([d.lower() for d in (info['departments'] or [])])
+        depts = [d for d in depts if d.lower() in allowed_user]
     return render_template("departments.html", departments=depts, namespace=db_namespace())
 
 
@@ -876,7 +950,7 @@ def db_derive_departments():
 
 @app.get("/departments/<dept>/csv")
 def ui_department_csv(dept: str):
-    if not is_allowed_department(dept):
+    if not _is_user_allowed_department(dept):
         flash("Département non autorisé", "error")
         return redirect(url_for('ui_departments'))
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -889,7 +963,7 @@ def ui_department_csv(dept: str):
 
 @app.post("/departments/<dept>/csv/upload")
 def department_csv_upload(dept: str):
-    if not is_allowed_department(dept):
+    if not _is_user_allowed_department(dept):
         return jsonify({"ok": False, "error": "Département non autorisé"}), 403
     logical = request.args.get('type') or request.form.get('type')
     if not logical or logical not in dict(CSV_LOGICAL):
@@ -909,7 +983,7 @@ def department_csv_upload(dept: str):
 
 @app.post("/departments/<dept>/csv/load")
 def department_csv_load(dept: str):
-    if not is_allowed_department(dept):
+    if not _is_user_allowed_department(dept):
         return jsonify({"ok": False, "error": "Département non autorisé"}), 403
     if single_db_mode():
         engine = get_engine()
@@ -933,7 +1007,7 @@ def departments_open():
     if not name:
         flash("Saisissez un nom de département", "error")
         return redirect(url_for('ui_departments'))
-    if not is_allowed_department(name):
+    if not _is_user_allowed_department(name):
         flash("DÇ¸partement non autorisÇ¸", "error")
         return redirect(url_for('ui_departments'))
     return redirect(url_for('ui_department_csv', dept=name))
@@ -942,7 +1016,7 @@ def departments_open():
 @app.post("/departments/<dept>/assign")
 @app.get("/departments/<dept>/assign")
 def department_assign(dept: str):
-    if not is_allowed_department(dept):
+    if not _is_user_allowed_department(dept):
         return jsonify({"ok": False, "error": "Département non autorisé"}), 403
     if assign_module is None:
         return jsonify({"ok": False, "error": f"Cannot import run.py: {ASSIGN_IMPORT_ERROR}"}), 500
@@ -1043,7 +1117,7 @@ def assign_download_global():
 
 @app.get("/departments/<dept>/assign/download")
 def department_assign_download(dept: str):
-    if not is_allowed_department(dept):
+    if not _is_user_allowed_department(dept):
         return jsonify({"ok": False, "error": "Departement non autorise"}), 403
     if assign_module is None:
         return jsonify({"ok": False, "error": f"Cannot import run.py: {ASSIGN_IMPORT_ERROR}"}), 500
@@ -1082,7 +1156,7 @@ def department_assign_download(dept: str):
 
 @app.get("/departments/<dept>/csv/template")
 def department_csv_template(dept: str):
-    if not is_allowed_department(dept):
+    if not _is_user_allowed_department(dept):
         return jsonify({"ok": False, "error": "Département non autorisé"}), 403
     logical = request.args.get('type')
     try:
@@ -1114,7 +1188,7 @@ def department_csv_template(dept: str):
 
 @app.get("/departments/<dept>/csv/validate")
 def department_csv_validate(dept: str):
-    if not is_allowed_department(dept):
+    if not _is_user_allowed_department(dept):
         return jsonify({"ok": False, "error": "Departement non autorise"}), 403
     logical = request.args.get('type')
     if not logical or logical not in dict(CSV_LOGICAL):
@@ -1149,7 +1223,7 @@ def csv_required():
 
 @app.get("/departments/<dept>/csv/fill-download")
 def department_csv_fill_download(dept: str):
-    if not is_allowed_department(dept):
+    if not _is_user_allowed_department(dept):
         return jsonify({"ok": False, "error": "Département non autorisé"}), 403
     logical = request.args.get('type', 'tachessepare')
     if logical not in dict(CSV_LOGICAL):
@@ -1209,6 +1283,8 @@ def db_create_and_init():
         name = request.args.get("name") if request.method == 'GET' else (request.get_json(silent=True) or {}).get("name")
         if not name:
             return jsonify({"ok": False, "error": "Paramètre 'name' requis"}), 400
+        if not bool(session.get('is_admin')):
+            return jsonify({"ok": False, "error": "Action réservée à l'administrateur"}), 403
         if not is_allowed_department(name):
             return jsonify({"ok": False, "error": "Département non autorisé"}), 403
         qname = qualify_db_name(name)
@@ -1230,7 +1306,7 @@ def db_switch():
         name = request.args.get("name") if request.method == 'GET' else (request.get_json(silent=True) or {}).get("name")
         if not name:
             return jsonify({"ok": False, "error": "Paramètre 'name' requis"}), 400
-        if not is_allowed_department(name):
+        if not _is_user_allowed_department(name):
             return jsonify({"ok": False, "error": "Département non autorisé"}), 403
         qname = qualify_db_name(name)
         set_current_database(qname)
@@ -1269,6 +1345,9 @@ def db_copy_schema():
         target = request.args.get("target") if request.method == 'GET' else (request.get_json(silent=True) or {}).get("target")
         if not source or not target:
             return jsonify({"ok": False, "error": "Paramètres 'source' et 'target' requis"}), 400
+        # Restrict to admins
+        if not bool(session.get('is_admin')):
+            return jsonify({"ok": False, "error": "Action réservée à l'administrateur"}), 403
         if not (is_allowed_department(source) and is_allowed_department(target)):
             return jsonify({"ok": False, "error": "Départements non autorisés"}), 403
         # Qualify within namespace and validate allowed
@@ -1299,7 +1378,14 @@ def db_copy_schema():
 @app.get("/db/allowed")
 def db_allowed():
     try:
-        return jsonify({"ok": True, "namespace": db_namespace(), "departments": allowed_departments()})
+        base = allowed_departments()
+        info = _current_user_info()
+        if info['is_admin']:
+            depts = base
+        else:
+            user_depts = set([d.lower() for d in (info['departments'] or [])])
+            depts = [d for d in base if d.lower() in user_depts]
+        return jsonify({"ok": True, "namespace": db_namespace(), "departments": depts})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -1308,6 +1394,9 @@ def db_allowed():
 @app.get("/db/drop")
 def db_drop():
     try:
+        # Only admin may drop databases
+        if not bool(session.get('is_admin')):
+            return jsonify({"ok": False, "error": "Action réservée à l'administrateur"}), 403
         raw = request.args.get("name") if request.method == 'GET' else (request.get_json(silent=True) or {}).get("name")
         if not raw:
             return jsonify({"ok": False, "error": "Paramètre 'name' requis"}), 400
@@ -1334,7 +1423,7 @@ def db_drop():
 
 @app.post("/departments/<dept>/prepare")
 def department_prepare(dept: str):
-    if not is_allowed_department(dept):
+    if not _is_user_allowed_department(dept):
         return jsonify({"ok": False, "error": "Département non autorisé"}), 403
     try:
         dept_dir = os.path.join(uploads_dir_base(), 'departments', dept)
