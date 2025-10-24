@@ -170,17 +170,32 @@ def ensure_meta_table(engine: Engine):
 def ensure_table(engine: Engine, table: str, columns: List[str], types: Dict[str, str], original_map: Dict[str, str]):
     inspector = inspect(engine)
     existing_cols = {c['name'] for c in inspector.get_columns(table)} if inspector.has_table(table) else set()
+    # Build a de-duplicated list of data columns (excluding special ones)
+    data_cols: List[str] = []
+    seen = set()
+    for c in columns:
+        if c in seen:
+            continue
+        seen.add(c)
+        data_cols.append(c)
+
     with engine.begin() as conn:
         if not inspector.has_table(table):
             # Create table with inferred types and row_hash PK
-            cols_sql = ", ".join([f"`{c}` {types.get(c, 'TEXT')} NULL" for c in columns])
-            sql = f"CREATE TABLE `{table}` (\n" \
-                  f"  `row_hash` CHAR(32) NOT NULL,\n" \
-                  f"  `departement` VARCHAR(64) NULL,\n" \
-                  f"  {cols_sql},\n" \
-                  f"  `ingested_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n" \
-                  f"  PRIMARY KEY (`row_hash`)\n" \
-                  f") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+            # Always include `departement` once; exclude it from the dynamic list if present
+            data_cols_no_dept = [c for c in data_cols if c != 'departement']
+            cols_sql = ", ".join([f"`{c}` {types.get(c, 'TEXT')} NULL" for c in data_cols_no_dept])
+            if cols_sql:
+                cols_sql = ",\n  " + cols_sql
+            sql = (
+                f"CREATE TABLE `{table}` (\n"
+                f"  `row_hash` CHAR(32) NOT NULL,\n"
+                f"  `departement` VARCHAR(64) NULL"
+                f"{cols_sql},\n"
+                f"  `ingested_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n"
+                f"  PRIMARY KEY (`row_hash`)\n"
+                f") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+            )
             conn.exec_driver_sql(sql)
         else:
             # Ensure row_hash exists and is PK
@@ -190,23 +205,33 @@ def ensure_table(engine: Engine, table: str, columns: List[str], types: Dict[str
             # Ensure departement exists
             if 'departement' not in existing_cols:
                 conn.exec_driver_sql(f"ALTER TABLE `{table}` ADD COLUMN `departement` VARCHAR(64) NULL AFTER `row_hash`")
-            # Add any missing data columns with inferred types
-            for c in columns:
+            # Add any missing data columns with inferred types (skip departement to avoid duplicate)
+            for c in data_cols:
+                if c == 'departement':
+                    continue
                 if c not in existing_cols:
                     conn.exec_driver_sql(f"ALTER TABLE `{table}` ADD COLUMN `{c}` {types.get(c, 'TEXT')} NULL")
-        # Update meta mapping
+        # Update meta mapping (deduplicated, include departement once)
         ensure_meta_table(engine)
         rows = []
-        for c in ['departement'] + list(columns):
+        meta_cols: List[str] = []
+        seen_meta = set()
+        for c in ['departement'] + data_cols:
+            if c in seen_meta:
+                continue
+            seen_meta.add(c)
+            meta_cols.append(c)
+        for c in meta_cols:
             rows.append((table, c, original_map.get(c), types.get(c, 'TEXT')))
-        conn.exec_driver_sql(
-            """
-            INSERT INTO `ingestion_columns_meta`(table_name, column_name, original_name, mysql_type)
-            VALUES (%s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE original_name=VALUES(original_name), mysql_type=VALUES(mysql_type)
-            """,
-            rows
-        )
+        if rows:
+            conn.exec_driver_sql(
+                """
+                INSERT INTO `ingestion_columns_meta`(table_name, column_name, original_name, mysql_type)
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE original_name=VALUES(original_name), mysql_type=VALUES(mysql_type)
+                """,
+                rows
+            )
 
 
 def ensure_departement_index(engine: Engine, table: str):
@@ -547,4 +572,3 @@ def fill_tachessepare_from_assign(df_ts: pd.DataFrame, df_assign: pd.DataFrame) 
     merged[ts_res] = [pick(a, b) for a, b in zip(merged[ts_res], merged[asg_res])]
     merged = merged.drop(columns=['_ln', asg_res])
     return merged
-
