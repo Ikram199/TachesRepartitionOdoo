@@ -13,6 +13,7 @@
         <a href="/" class="active">Accueil</a>
         <a href="/departments">Départements</a>
         {% if not file_only %}<a href="/tables">Tables</a>{% endif %}
+        {% if is_admin %}<a href="/admin/users">Admin</a>{% endif %}
         <a href="/upload">Upload</a>
       </nav>
       <div id="health" class="pill">Vérification…</div>

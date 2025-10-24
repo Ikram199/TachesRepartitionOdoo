@@ -30,7 +30,7 @@ else:
     ASSIGN_IMPORT_ERROR = None
 
 from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, flash, session
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -211,7 +211,7 @@ def health():
 def index():
     if not session.get("auth"): 
         return redirect(url_for("login"))
-    return render_template("index.html", file_only=file_only_mode())
+    return render_template("index.html", file_only=file_only_mode(), is_admin=bool(session.get('is_admin')))
 
 # -------------------- User access helpers --------------------
 def _current_user_info() -> dict:
@@ -235,6 +235,216 @@ def _is_user_allowed_department(dept: str) -> bool:
     if not depts:
         return False
     return str(dept).strip().lower() in depts
+
+# -------------------- Admin: Users management --------------------
+def _admin_required():
+    if not session.get('auth'):
+        return redirect(url_for('login', next=request.path))
+    if not bool(session.get('is_admin')):
+        flash("Accès réservé à l'administrateur", "error")
+        return redirect(url_for('index'))
+
+def _ensure_default_roles(conn):
+    from sqlalchemy import text as _text
+    for name in ("admin", "manager", "viewer"):
+        conn.execute(_text("INSERT INTO roles(name) VALUES (:n) ON DUPLICATE KEY UPDATE name=name"), {"n": name})
+
+def _all_roles(conn):
+    from sqlalchemy import text as _text
+    return list(conn.execute(_text("SELECT id, name FROM roles ORDER BY name")).mappings())
+
+def _all_departments_for_admin():
+    try:
+        depts = allowed_departments()
+        if not depts:
+            depts = derive_departments_from_databases()
+        return depts
+    except Exception:
+        return []
+
+@app.get('/admin/users')
+def admin_users_list():
+    guard = _admin_required()
+    if guard:
+        return guard
+    ensure_database_exists()
+    engine = get_engine()
+    try:
+        init_db(engine)
+    except Exception:
+        pass
+    from sqlalchemy import text
+    with engine.begin() as conn:
+        _ensure_default_roles(conn)
+    with engine.connect() as conn:
+        rows = list(conn.execute(text(
+            """
+            SELECT u.id, u.username, u.is_active,
+                   GROUP_CONCAT(DISTINCT r.name ORDER BY r.name SEPARATOR ',') AS roles,
+                   GROUP_CONCAT(DISTINCT d.department ORDER BY d.department SEPARATOR ',') AS depts
+            FROM users u
+            LEFT JOIN user_roles ur ON ur.user_id=u.id
+            LEFT JOIN roles r ON r.id=ur.role_id
+            LEFT JOIN user_departments d ON d.user_id=u.id
+            GROUP BY u.id, u.username, u.is_active
+            ORDER BY u.username
+            """
+        )).mappings())
+        roles = _all_roles(conn)
+        depts = _all_departments_for_admin()
+    return render_template('admin_users.html', users=rows, roles=roles, departments=depts)
+
+@app.get('/admin/users/new')
+def admin_user_new_form():
+    guard = _admin_required()
+    if guard:
+        return guard
+    ensure_database_exists()
+    engine = get_engine()
+    try:
+        init_db(engine)
+    except Exception:
+        pass
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        roles = _all_roles(conn)
+        depts = _all_departments_for_admin()
+    return render_template('admin_user_form.html', user=None, roles=roles, departments=depts)
+
+@app.post('/admin/users/new')
+def admin_user_new_post():
+    guard = _admin_required()
+    if guard:
+        return guard
+    ensure_database_exists()
+    engine = get_engine()
+    try:
+        init_db(engine)
+    except Exception:
+        pass
+    username = (request.form.get('username') or '').strip()
+    password = request.form.get('password') or ''
+    is_active = 1 if request.form.get('is_active') == 'on' else 0
+    role_ids = request.form.getlist('roles')
+    dept_list = request.form.getlist('departments')
+    can_write = 1 if request.form.get('can_write') == 'on' else 0
+    if not username or not password:
+        flash('Renseignez au moins un nom et un mot de passe', 'error')
+        return redirect(url_for('admin_user_new_form'))
+    pw_hash = generate_password_hash(password)
+    from sqlalchemy import text
+    try:
+        with engine.begin() as conn:
+            # Create user
+            res = conn.execute(text("INSERT INTO users(username, password_hash, is_active) VALUES (:u, :p, :a)"), {"u": username, "p": pw_hash, "a": is_active})
+            uid = res.lastrowid
+            # Roles
+            for rid in role_ids:
+                try:
+                    conn.execute(text("INSERT INTO user_roles(user_id, role_id) VALUES (:u,:r)"), {"u": uid, "r": int(rid)})
+                except Exception:
+                    pass
+            # Departments
+            for d in dept_list:
+                conn.execute(text("INSERT INTO user_departments(user_id, department, can_write) VALUES (:u,:d,:w) ON DUPLICATE KEY UPDATE can_write=VALUES(can_write)"), {"u": uid, "d": d.strip().lower(), "w": can_write})
+        flash('Utilisateur créé', 'success')
+        return redirect(url_for('admin_users_list'))
+    except Exception as e:
+        flash(f'Erreur: {e}', 'error')
+        return redirect(url_for('admin_user_new_form'))
+
+@app.get('/admin/users/<int:uid>/edit')
+def admin_user_edit_form(uid: int):
+    guard = _admin_required()
+    if guard:
+        return guard
+    ensure_database_exists()
+    engine = get_engine()
+    try:
+        init_db(engine)
+    except Exception:
+        pass
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        user = conn.execute(text("SELECT id, username, is_active FROM users WHERE id=:id"), {"id": uid}).mappings().first()
+        if not user:
+            flash('Utilisateur introuvable', 'error')
+            return redirect(url_for('admin_users_list'))
+        roles = _all_roles(conn)
+        user_role_ids = {r['role_id'] for r in conn.execute(text("SELECT role_id FROM user_roles WHERE user_id=:u"), {"u": uid})}
+        depts = _all_departments_for_admin()
+        user_depts = {d['department']: d['can_write'] for d in conn.execute(text("SELECT department, can_write FROM user_departments WHERE user_id=:u"), {"u": uid}).mappings()}
+    return render_template('admin_user_form.html', user=user, roles=roles, user_role_ids=user_role_ids, departments=depts, user_depts=user_depts)
+
+@app.post('/admin/users/<int:uid>/edit')
+def admin_user_edit_post(uid: int):
+    guard = _admin_required()
+    if guard:
+        return guard
+    ensure_database_exists()
+    engine = get_engine()
+    try:
+        init_db(engine)
+    except Exception:
+        pass
+    username = (request.form.get('username') or '').strip()
+    password = request.form.get('password') or ''
+    is_active = 1 if request.form.get('is_active') == 'on' else 0
+    role_ids = request.form.getlist('roles')
+    dept_list = request.form.getlist('departments')
+    can_write = 1 if request.form.get('can_write') == 'on' else 0
+    if not username:
+        flash('Nom requis', 'error')
+        return redirect(url_for('admin_user_edit_form', uid=uid))
+    from sqlalchemy import text
+    try:
+        with engine.begin() as conn:
+            # Update basic fields
+            if password:
+                pw_hash = generate_password_hash(password)
+                conn.execute(text("UPDATE users SET username=:u, is_active=:a, password_hash=:p WHERE id=:id"), {"u": username, "a": is_active, "p": pw_hash, "id": uid})
+            else:
+                conn.execute(text("UPDATE users SET username=:u, is_active=:a WHERE id=:id"), {"u": username, "a": is_active, "id": uid})
+            # Replace roles
+            conn.execute(text("DELETE FROM user_roles WHERE user_id=:u"), {"u": uid})
+            for rid in role_ids:
+                try:
+                    conn.execute(text("INSERT INTO user_roles(user_id, role_id) VALUES (:u,:r)"), {"u": uid, "r": int(rid)})
+                except Exception:
+                    pass
+            # Replace departments
+            conn.execute(text("DELETE FROM user_departments WHERE user_id=:u"), {"u": uid})
+            for d in dept_list:
+                conn.execute(text("INSERT INTO user_departments(user_id, department, can_write) VALUES (:u,:d,:w)"), {"u": uid, "d": d.strip().lower(), "w": can_write})
+        flash('Utilisateur mis à jour', 'success')
+        return redirect(url_for('admin_users_list'))
+    except Exception as e:
+        flash(f'Erreur: {e}', 'error')
+        return redirect(url_for('admin_user_edit_form', uid=uid))
+
+@app.post('/admin/users/<int:uid>/delete')
+def admin_user_delete(uid: int):
+    guard = _admin_required()
+    if guard:
+        return guard
+    # Prevent deleting self
+    if session.get('user_id') == uid:
+        flash("Vous ne pouvez pas supprimer votre propre compte", 'error')
+        return redirect(url_for('admin_users_list'))
+    ensure_database_exists()
+    engine = get_engine()
+    try:
+        init_db(engine)
+    except Exception:
+        pass
+    from sqlalchemy import text
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM users WHERE id=:id"), {"id": uid})
+        flash('Utilisateur supprimé', 'success')
+    except Exception as e:
+        flash(f'Erreur: {e}', 'error')
+    return redirect(url_for('admin_users_list'))
 # -------------------- New DB-first flow --------------------
 
 def _db_folder(dbname: str) -> str:

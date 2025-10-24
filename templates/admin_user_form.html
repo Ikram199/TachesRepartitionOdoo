@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% if user %}Modifier{% else %}Créer{% endif %} un utilisateur</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>{% if user %}Modifier{% else %}Créer{% endif %} un utilisateur</h1>
+      <nav>
+        <a href="/">Accueil</a>
+        <a href="/admin/users" class="active">Admin</a>
+      </nav>
+    </header>
+    <main>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <ul class="flash">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+          </ul>
+        {% endif %}
+      {% endwith %}
+
+      <section>
+        <form method="POST" action="{% if user %}/admin/users/{{ user.id }}/edit{% else %}/admin/users/new{% endif %}" class="db-form">
+          <div class="row">
+            <label>Username</label>
+            <input type="text" name="username" value="{{ user.username if user else '' }}" placeholder="ex: alice" required />
+          </div>
+          <div class="row">
+            <label>{% if user %}Nouveau mot de passe{% else %}Mot de passe{% endif %}</label>
+            <input type="password" name="password" placeholder="{% if user %}(laisser vide pour ne pas changer){% else %}••••••••{% endif %}" />
+          </div>
+          <div class="row">
+            <label>Actif</label>
+            <input type="checkbox" name="is_active" {% if (user and user.is_active) or not user %}checked{% endif %} />
+          </div>
+          <div class="row">
+            <label>Rôles</label>
+            <select name="roles" id="roles" multiple size="4">
+              {% for r in roles %}
+              <option value="{{ r.id }}" {% if user_role_ids and (r.id in user_role_ids) %}selected{% endif %}>{{ r.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row">
+            <label>Départements</label>
+            <select name="departments" id="departments" multiple size="6">
+              {% for d in departments %}
+              <option value="{{ d }}" {% if user_depts and (d in user_depts) %}selected{% endif %}>{{ d }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row">
+            <label>Peut modifier (écriture)</label>
+            <input type="checkbox" name="can_write" {% if user_depts %}{% if (user_depts|list)|length and (user_depts|first) %}checked{% endif %}{% else %}checked{% endif %} />
+          </div>
+          <div class="actions">
+            <button type="submit">Enregistrer</button>
+            <a class="btn" href="/admin/users" style="margin-left:8px;">Annuler</a>
+          </div>
+        </form>
+      </section>
+    </main>
+  </body>
+  </html>
+

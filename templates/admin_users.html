@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Administration — Utilisateurs</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Administration — Utilisateurs</h1>
+      <nav>
+        <a href="/">Accueil</a>
+        <a href="/admin/users" class="active">Admin</a>
+      </nav>
+    </header>
+    <main>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <ul class="flash">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+          </ul>
+        {% endif %}
+      {% endwith %}
+
+      <section>
+        <div class="row" style="justify-content: space-between;">
+          <h2 style="margin:0;">Utilisateurs</h2>
+          <div>
+            <a class="btn" href="/admin/users/new">Créer un utilisateur</a>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead>
+              <tr><th>ID</th><th>Username</th><th>Actif</th><th>Rôles</th><th>Départements</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+              {% for u in users %}
+              <tr>
+                <td>{{ u.id }}</td>
+                <td>{{ u.username }}</td>
+                <td>{{ 1 if u.is_active else 0 }}</td>
+                <td>{{ u.roles or '' }}</td>
+                <td>{{ u.depts or '' }}</td>
+                <td>
+                  <a class="btn" href="/admin/users/{{ u.id }}/edit">Modifier</a>
+                  <form method="POST" action="/admin/users/{{ u.id }}/delete" style="display:inline-block; margin-left:6px;" onsubmit="return confirm('Supprimer cet utilisateur ?');">
+                    <button class="danger" type="submit">Supprimer</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>Rappels</h2>
+        <ul>
+          <li>Rôles disponibles: {% for r in roles %}<code>{{ r.name }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</li>
+          <li>Départements gérables: {% for d in departments %}<code>{{ d }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+  </html>
+
