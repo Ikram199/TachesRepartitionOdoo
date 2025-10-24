@@ -45,7 +45,7 @@ button:active { transform: translateY(0); }
 
 .row { display: grid; grid-template-columns: 240px 1fr; gap: 10px; align-items: center; margin-bottom: 12px; }
 label { color: var(--muted); font-weight: 500; }
-input[type="text"], input[type="number"], select, input[type="date"], input[type="file"] {
+input[type="text"], input[type="number"], select, input[type="date"], input[type="file"],  input[type="password"] {
   background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; outline: none;
 }
 input:focus, select:focus { border-color: #c7d2fe; box-shadow: 0 0 0 4px rgba(99,102,241,.15); }
