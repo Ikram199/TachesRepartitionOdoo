@@ -57,6 +57,64 @@ async function refreshOverview() {
   }
 }
 
+async function renderDepartmentsDashboard() {
+  const grid = document.getElementById('dept-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  let depts = [];
+  let namespace = '';
+  try {
+    const allowed = await getJSON('/db/allowed');
+    depts = allowed.departments || [];
+    namespace = allowed.namespace || '';
+  } catch (_) {}
+  if (!depts.length) {
+    try {
+      const derived = await getJSON('/db/derive-departments');
+      depts = derived.departments || [];
+      namespace = derived.namespace || namespace || '';
+    } catch (_) {}
+  }
+  if (!depts.length) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = '<div class="card-title">Aucun département</div><div class="card-meta">Configurez ALLOWED_DEPARTMENTS ou créez des bases sous le namespace.</div>';
+    grid.appendChild(card);
+    return;
+  }
+  const requiredList = ['tacheslignes','pointage','competence','priorite','tachessepare'];
+  for (const dept of depts) {
+    try {
+      const prep = await getJSON(`/departments/${encodeURIComponent(dept)}/prepare`);
+      const exists = prep.exists || {};
+      const total = requiredList.length;
+      let present = 0;
+      requiredList.forEach(k => { if (exists[k]) present += 1; });
+      const card = document.createElement('div');
+      card.className = 'card';
+      const ok = present === total;
+      const badge = ok ? `<span class="badge">OK</span>` : `<span class="badge">${present}/${total} prêts</span>`;
+      const links = [
+        `<a class="btn" href="/departments/${encodeURIComponent(dept)}/csv">Gérer CSV</a>`,
+        `<a class="btn" href="/departments/${encodeURIComponent(dept)}/assign">Assigner</a>`,
+        `<a class="btn" href="/departments/${encodeURIComponent(dept)}/assign/download">Télécharger lignes</a>`,
+        `<a class="btn" href="/departments/${encodeURIComponent(dept)}/csv/fill-download?type=tachessepare&source=assign">Tâches assignées</a>`
+      ].join(' ');
+      card.innerHTML = `
+        <div class="card-title">${dept} ${badge}</div>
+        <div class="card-meta">Namespace: ${namespace || '(défaut)'} · Dossier prêt</div>
+        <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">${links}</div>
+      `;
+      grid.appendChild(card);
+    } catch (e) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `<div class="card-title">${dept}</div><div class="card-meta">Erreur: ${String(e)}</div>`;
+      grid.appendChild(card);
+    }
+  }
+}
+
 async function loadDbList() {
   const sel = document.getElementById('db-list');
   if (!sel) return;
@@ -267,6 +325,7 @@ async function onAssign() {
     refreshOverview();
     loadDbList();
   }
+  renderDepartmentsDashboard();
   loadAllowedDepartments();
   const pickBtn = document.getElementById('btn-pick-db');
   const refreshBtn = document.getElementById('btn-refresh-db');

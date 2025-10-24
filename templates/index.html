@@ -3,37 +3,87 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>App Web - Répartition</title>
+    <title>Dashboard — Répartition</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <header>
-      <h1>Console de répartition</h1>
+      <h1>Dashboard – Répartition</h1>
       <nav>
         <a href="/" class="active">Accueil</a>
-        
         <a href="/departments">Départements</a>
         {% if not file_only %}<a href="/tables">Tables</a>{% endif %}
+        <a href="/upload">Upload</a>
       </nav>
-      <div id="health" class="pill">Vérification.</div>
+      <div id="health" class="pill">Vérification…</div>
     </header>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <main>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <ul class="flash">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+          </ul>
+        {% endif %}
+      {% endwith %}
+
       <section>
-        <h2>Démarrer</h2>
-        <p>Choisissez un département.</p>
-        <div class="actions">
-         
-          <a class="btn" href="/departments">Départements</a>
+        <h2>Vue d'ensemble base</h2>
+        {% if not file_only %}
+        <div class="row">
+          <label>Base actuelle</label>
+          <div>
+            <span id="db-name" class="badge">(chargement)</span>
+            <a class="btn" href="/tables" style="margin-left:8px;">Voir les tables</a>
+          </div>
+        </div>
+        <div id="overview" class="cards" aria-live="polite"></div>
+        {% else %}
+        <p class="muted">Mode fichiers seul actif — section base masquée.</p>
+        {% endif %}
+      </section>
+
+      <section>
+        <h2>Départements</h2>
+        <div id="dept-grid" class="cards">
+          <!-- rempli dynamiquement -->
+        </div>
+        <div class="actions" style="margin-top:12px;">
+          <a class="btn" href="/departments">Gérer tous les départements</a>
         </div>
       </section>
+
+      <section>
+        <h2>Actions rapides</h2>
+        <div class="row">
+          <label>Département</label>
+          <div>
+            <input id="dept" type="text" placeholder="ex: HUB" />
+            <select id="dept-select" class="hidden"></select>
+            <span id="ns-badge" class="badge" style="margin-left:8px;"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label>Période (optionnel)</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <input type="date" id="start" />
+            <input type="date" id="end" />
+            <input type="number" id="max" placeholder="Max/jour (défaut)" style="width:180px;" />
+          </div>
+        </div>
+        <div class="actions" style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button id="btn-simple-load">Charger les CSV du département</button>
+          <button id="btn-simple-assign">Lancer l'affectation</button>
+          <a id="btn-download" class="btn" href="#">Télécharger la dernière affectation</a>
+        </div>
+        <pre id="output" class="output" style="margin-top:12px; min-height:100px;">Prêt.</pre>
+      </section>
     </main>
-
-
 
     <script>window.FILE_ONLY = {{ 'true' if file_only else 'false' }};</script>
     <script src="/static/main.js"></script>
   </body>
   </html>
-
